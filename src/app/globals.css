@@ -71,30 +71,6 @@ body {
   transform: translateY(-4px) scale(1.01);
 }
 
-.logo-highlight {
-  background: linear-gradient(135deg, rgba(5, 20, 45, 0.9), rgba(10, 10, 15, 0.96));
-  border: 1px solid rgba(180, 230, 50, 0.5);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 0 22px rgba(180, 230, 50, 0.22);
-}
-
-.logo-image {
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
-}
-
-.light .logo-highlight {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.98));
-  border-color: rgba(132, 185, 28, 0.6);
-  box-shadow:
-    inset 0 0 0 1px rgba(15, 23, 42, 0.06),
-    0 0 18px rgba(132, 185, 28, 0.2);
-}
-
-.light .logo-image {
-  filter: drop-shadow(0 1px 3px rgba(15, 23, 42, 0.25));
-}
-
 .light .text-white {
   color: rgb(15 23 42) !important;
 }

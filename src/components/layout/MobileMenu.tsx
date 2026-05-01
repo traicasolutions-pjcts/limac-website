@@ -40,13 +40,13 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <div className="flex items-center gap-2">
-            <div className="logo-highlight rounded-md overflow-hidden p-1.5">
+            <div className="overflow-hidden">
               <Image
                 src={withBasePath('/logo.webp')}
                 alt="Limac Power Tech Logo"
-                width={84}
-                height={36}
-                className="logo-image h-6 w-auto"
+                width={120}
+                height={50}
+                className="h-9 w-auto"
               />
             </div>
             <span className="font-bold text-white text-sm">Limac Power Tech</span>

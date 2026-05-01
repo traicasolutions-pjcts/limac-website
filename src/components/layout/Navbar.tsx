@@ -56,14 +56,14 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="logo-highlight relative overflow-hidden rounded-md p-1.5 transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-[0_0_26px_rgba(180,230,50,0.32)]">
+              <div className="relative overflow-hidden transition-transform duration-300 group-hover:scale-[1.02]">
                 <Image
                   src={withBasePath('/logo.webp')}
                   alt="Limac Power Tech Logo"
-                  width={108}
-                  height={45}
+                  width={156}
+                  height={65}
                   priority
-                  className="logo-image h-7 w-auto"
+                  className="h-11 w-auto"
                 />
               </div>
               <div className="hidden sm:flex flex-col leading-none">

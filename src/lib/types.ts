@@ -4,12 +4,14 @@ export interface Product {
   id: string
   name: string
   slug: string
-  category: 'solar-storage' | 'motorcycle' | '12v-series' | 'lifepo4-lighting'
+  category: string
   shortDescription: string
   longDescription?: string
   description?: unknown // Payload rich text (Slate)
   imageUrl?: string
+  imageUrls?: string[]
   imageAlt?: string
+  keyFeatures: string[]
   specsGroup: {
     voltage: string
     capacity: string

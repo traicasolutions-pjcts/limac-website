@@ -29,6 +29,8 @@ export const LIMAC = {
 
 export const PRODUCT_CATEGORIES = [
   { label: 'Solar Storage', value: 'solar-storage', description: 'LiFePO4 packs for solar systems', icon: '☀️' },
+  { label: 'E Scooter', value: 'escooter', description: 'Battery packs for electric scooters', icon: 'EV' },
+  { label: 'Customized Battery Packs', value: 'customized batterys packs', description: 'Custom lithium battery packs', icon: 'Li' },
   { label: 'Motorcycle Batteries', value: 'motorcycle', description: 'CCA starter batteries', icon: '🏍️' },
   { label: '12V Series', value: '12v-series', description: 'Deep cycle range', icon: '⚡' },
   { label: 'LiFePO4 Lighting', value: 'lifepo4-lighting', description: 'Lighting systems', icon: '💡' },

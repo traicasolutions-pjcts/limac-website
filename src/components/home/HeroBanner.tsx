@@ -50,7 +50,7 @@ export default function HeroBanner() {
             <div className="flex flex-wrap gap-3 mb-8">
               {[
                 '✓ 2000+ Cycle Life',
-                '✓ 3-Year Warranty',
+                '✓ 3 to 5-Year Warranty',
                 '✓ Built-in BMS',
                 '✓ ISO Certified',
               ].map((badge) => (

@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import Image from 'next/image'
-import { Battery, CheckCircle, ArrowLeft } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import Badge from '@/components/common/Badge'
 import EnquiryForm from '@/components/forms/EnquiryForm'
-import { PRODUCT_CATEGORIES } from '@/lib/constants'
+import ProductImageSlideshow from '@/components/products/ProductImageSlideshow'
 import { getProductBySlug, getProducts } from '@/lib/payload'
+import { formatCategoryLabel } from '@/lib/utils'
 
 export async function generateStaticParams() {
   const products = await getProducts()
@@ -18,7 +18,8 @@ interface ProductPageProps {
 }
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const product = await getProductBySlug(params.slug)
+  const { slug } = await params
+  const product = await getProductBySlug(slug)
   if (!product) return { title: 'Product Not Found' }
 
   return {
@@ -45,7 +46,8 @@ const SPEC_LABELS: Record<string, string> = {
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
-  const product = await getProductBySlug(params.slug)
+  const { slug } = await params
+  const product = await getProductBySlug(slug)
   if (!product) notFound()
 
   const allProducts = await getProducts()
@@ -53,7 +55,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
     (p) => p.category === product.category && p.slug !== product.slug
   ).slice(0, 3)
 
-  const categoryLabel = PRODUCT_CATEGORIES.find((c) => c.value === product.category)?.label
+  const categoryLabel = formatCategoryLabel(product.category)
 
   return (
     <div className="bg-limac-black pt-24">
@@ -74,31 +76,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
           {/* Left: Battery visual + quick specs */}
           <div>
             {/* Main image area */}
-            <div className="bg-gradient-to-br from-gray-900 to-limac-black border border-gray-800 rounded-2xl h-80 flex items-center justify-center mb-4 relative overflow-hidden">
-              {product.imageUrl ? (
-                <Image
-                  src={product.imageUrl}
-                  alt={product.imageAlt || product.name}
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-limac-green/5 via-transparent to-limac-cyan/5" />
-                  <div className="relative flex flex-col items-center gap-4">
-                    <Battery size={80} className="text-limac-green/70" strokeWidth={1} />
-                    <div className="text-center">
-                      <div className="text-limac-green font-bold text-xl">
-                        {product.specsGroup.voltage}
-                      </div>
-                      <div className="text-limac-muted">{product.specsGroup.capacity}</div>
-                    </div>
-                </div>
-                </>
-              )}
-            </div>
+            <ProductImageSlideshow
+              images={product.imageUrls?.length ? product.imageUrls : product.imageUrl ? [product.imageUrl] : []}
+              alt={product.imageAlt || product.name}
+              fallbackLabel={`${product.specsGroup.voltage} - ${product.specsGroup.capacity}`}
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="bg-gradient-to-br from-gray-900 to-limac-black border border-gray-800 rounded-2xl h-80 mb-4"
+              imageClassName="object-cover"
+              priority
+            />
 
             <div className="flex gap-3 mb-6">
               <Badge variant="green">{categoryLabel}</Badge>
@@ -108,14 +94,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             {/* Key features */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <h3 className="text-white font-bold text-sm mb-4">Key Features</h3>
-              {[
-                'Lithium Iron Phosphate (LiFePO4) chemistry — non-toxic, thermally stable',
-                'Built-in Battery Management System (BMS) with overcharge, over-discharge, short-circuit protection',
-                `${product.specsGroup.cycleLife} expected — far exceeds lead-acid batteries`,
-                '80% Depth of Discharge (DoD) standard usage',
-                'Maintenance-free — no water topping, no gas emission',
-                `Operating range: ${product.specsGroup.operatingTemp}`,
-              ].map((feature, i) => (
+              {product.keyFeatures.map((feature, i) => (
                 <div key={i} className="flex items-start gap-2.5 mb-2.5">
                   <CheckCircle size={14} className="text-limac-green mt-0.5 shrink-0" />
                   <span className="text-limac-muted text-sm">{feature}</span>
@@ -168,22 +147,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {relatedProducts.map((rp) => (
                 <Link
-                  key={rp.id}
+                  key={rp.slug}
                   href={`/products/${rp.slug}`}
                   className="bg-gray-900 border border-gray-800 hover:border-limac-green/50 rounded-xl p-5 card-hover group"
                 >
                   <div className="relative h-24 bg-limac-black rounded-lg border border-gray-800 flex items-center justify-center mb-4 overflow-hidden">
-                    {rp.imageUrl ? (
-                      <Image
-                        src={rp.imageUrl}
-                        alt={rp.imageAlt || rp.name}
-                        fill
-                        sizes="(max-width: 768px) 50vw, 25vw"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <Battery size={28} className="text-limac-green/50 group-hover:text-limac-green transition-colors" />
-                    )}
+                    <ProductImageSlideshow
+                      images={rp.imageUrls?.length ? rp.imageUrls : rp.imageUrl ? [rp.imageUrl] : []}
+                      alt={rp.imageAlt || rp.name}
+                      fallbackLabel={`${rp.specsGroup.voltage} - ${rp.specsGroup.capacity}`}
+                      sizes="(max-width: 768px) 50vw, 25vw"
+                      className="absolute inset-0"
+                      imageClassName="object-cover"
+                      showControls={false}
+                    />
                   </div>
                   <h3 className="text-white font-bold text-sm mb-1 group-hover:text-limac-green transition-colors">
                     {rp.name}

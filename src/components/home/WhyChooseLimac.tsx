@@ -13,8 +13,8 @@ const TRUST_POINTS = [
     icon: Shield,
     title: 'Solid Warranty',
     description:
-      'Full 3-year warranty on solar batteries and 2 years on motorcycle batteries. We back our products because we know they last.',
-    stat: '3-Year Coverage',
+      'Full 3 to 5-year warranty on solar batteries and 2 years on motorcycle batteries. We back our products because we know they last.',
+    stat: '3 to 5-Year Coverage',
   },
   {
     icon: HeadphonesIcon,

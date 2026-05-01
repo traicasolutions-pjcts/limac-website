@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import HeroBanner from '@/components/home/HeroBanner'
 import LimacSiteProducts from '@/components/home/LimacSiteProducts'
-import ProductCategories from '@/components/home/ProductCategories'
 import WhyChooseLimac from '@/components/home/WhyChooseLimac'
 import LatestBlogPosts from '@/components/home/LatestBlogPosts'
 import Testimonials from '@/components/home/Testimonials'
@@ -24,7 +23,6 @@ export default function HomePage() {
   return (
     <>
       <HeroBanner />
-      <ProductCategories />
       <LimacSiteProducts />
       <WhyChooseLimac />
       <LatestBlogPosts />

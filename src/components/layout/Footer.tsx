@@ -15,13 +15,13 @@ export default function Footer() {
           {/* Brand column */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4 group">
-              <div className="logo-highlight rounded-md overflow-hidden p-1.5 transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-[0_0_26px_rgba(180,230,50,0.32)]">
+              <div className="overflow-hidden transition-transform duration-300 group-hover:scale-[1.02]">
                 <Image
                   src={withBasePath('/logo.webp')}
                   alt="Limac Power Tech Logo"
-                  width={108}
-                  height={45}
-                  className="logo-image h-7 w-auto"
+                  width={132}
+                  height={55}
+                  className="h-10 w-auto"
                 />
               </div>
               <div className="leading-none">

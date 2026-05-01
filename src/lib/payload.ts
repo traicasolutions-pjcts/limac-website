@@ -95,7 +95,18 @@ const parseCSV = (content: string): CsvProductRow[] => {
 
   const headers = parseCSVLine(lines[0]).map((header) => header.replace(/^\uFEFF/, '').trim())
   return lines.slice(1).map((line) => {
-    const values = parseCSVLine(line)
+    let values = parseCSVLine(line)
+    if (values.length > headers.length) {
+      const productImageIndex = headers.findIndex((header) => normalizeText(header) === 'productimage')
+      if (productImageIndex >= 0) {
+        const overflowCount = values.length - headers.length
+        values = [
+          ...values.slice(0, productImageIndex),
+          values.slice(productImageIndex, productImageIndex + overflowCount + 1).join(','),
+          ...values.slice(productImageIndex + overflowCount + 1),
+        ]
+      }
+    }
     return headers.reduce<CsvProductRow>((row, header, index) => {
       row[header] = values[index]?.trim() || ''
       return row
@@ -109,6 +120,11 @@ const inferCategory = (productName: string, specText: string): Product['category
   if (haystack.includes('12v')) return '12v-series'
   if (haystack.includes('street light') || haystack.includes('lighting')) return 'lifepo4-lighting'
   return 'solar-storage'
+}
+
+const normalizeCategory = (value: string, productName: string, specText: string): Product['category'] => {
+  const category = value.trim()
+  return category || inferCategory(productName, specText)
 }
 
 const inferVoltage = (productName: string, specText: string) => {
@@ -138,6 +154,16 @@ const normalizeImageLookupName = (value: string) => {
     .pop() || value
 
   return normalizeText(path.parse(cleanedValue).name)
+    .replace(/(\d+)\s+v\b/g, '$1v')
+    .replace(/(\d+)\s+ah\b/g, '$1ah')
+    .replace(/\s+/g, ' ')
+}
+
+const scoreImageNameMatch = (file: string, preferredKey: string, productKey: string) => {
+  const fileTokens = new Set(normalizeImageLookupName(file).split(/\s+/).filter(Boolean))
+  const requestedTokens = Array.from(new Set(`${preferredKey} ${productKey}`.split(/\s+/).filter(Boolean)))
+
+  return requestedTokens.reduce((score, token) => score + (fileTokens.has(token) ? 1 : 0), 0)
 }
 
 const findLocalImageURL = (productName: string, csvImageName: string, files: string[]) => {
@@ -148,10 +174,49 @@ const findLocalImageURL = (productName: string, csvImageName: string, files: str
   const chosenFile =
     files.find((file) => normalizeImageLookupName(file) === preferredKey) ||
     files.find((file) => normalizeImageLookupName(file) === productKey) ||
-    files.find((file) => normalizeImageLookupName(file).includes(productKey))
+    files.find((file) => normalizeImageLookupName(file).includes(productKey)) ||
+    files
+      .map((file) => ({ file, score: scoreImageNameMatch(file, preferredKey, productKey) }))
+      .filter((match) => match.score >= 3)
+      .sort((a, b) => b.score - a.score)[0]?.file
 
   return chosenFile ? withBasePath(`/product/${chosenFile}`) : undefined
 }
+
+const splitImageNames = (value: string) =>
+  value
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const findLocalImageURLs = (productName: string, csvImageName: string, files: string[]) => {
+  const imageNames = splitImageNames(csvImageName)
+  const imageUrls = imageNames
+    .map((imageName) => findLocalImageURL(productName, imageName, files))
+    .filter((url): url is string => Boolean(url))
+
+  if (imageUrls.length) {
+    return Array.from(new Set(imageUrls))
+  }
+
+  const fallbackUrl = findLocalImageURL(productName, '', files)
+  return fallbackUrl ? [fallbackUrl] : []
+}
+
+const splitListValue = (value: string) =>
+  value
+    .split(/[|;]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const getDefaultKeyFeatures = (cycleLife: string, operatingTemp: string) => [
+  'Lithium Iron Phosphate (LiFePO4) chemistry - non-toxic, thermally stable',
+  'Built-in Battery Management System (BMS) with overcharge, over-discharge, short-circuit protection',
+  `${cycleLife} expected - far exceeds lead-acid batteries`,
+  '80% Depth of Discharge (DoD) standard usage',
+  'Maintenance-free - no water topping, no gas emission',
+  `Operating range: ${operatingTemp}`,
+]
 
 const mapCsvRowToProduct = (
   row: CsvProductRow,
@@ -171,15 +236,19 @@ const mapCsvRowToProduct = (
     `LiFePO4 battery product from Limac catalog: ${productName}`
 
   const csvImageName = getCsvValue(row, ['ProductImage', 'Image', 'image'])
-  const localImageURL = findLocalImageURL(productName, csvImageName, files)
-  const finalImageURL = localImageURL
+  const imageUrls = findLocalImageURLs(productName, csvImageName, files)
+  const finalImageURL = imageUrls[0]
 
   const featuredValue = getCsvValue(row, ['Featured', 'isFeatured'])
   const isFeatured = ['1', 'true', 'yes', 'y'].includes(featuredValue.toLowerCase()) || index < 6
 
-  const category = inferCategory(productName, productSpecification)
+  const category = normalizeCategory(getCsvValue(row, ['Category', 'category']), productName, productSpecification)
   const voltage = getCsvValue(row, ['Voltage']) || inferVoltage(productName, productSpecification)
   const capacity = getCsvValue(row, ['Capacity']) || inferCapacity(productName, productSpecification)
+  const cycleLife = getCsvValue(row, ['CycleLife', 'Cycle Life']) || '2000+ cycles'
+  const operatingTemp = getCsvValue(row, ['OperatingTemp', 'Operating Temperature']) || '-20°C to 60°C'
+  const csvKeyFeatures = splitListValue(getCsvValue(row, ['KeyFeatures', 'Key Features', 'Features']))
+  const keyFeatures = csvKeyFeatures.length ? csvKeyFeatures : getDefaultKeyFeatures(cycleLife, operatingTemp)
 
   return {
     id: getCsvValue(row, ['ProductID', 'id']) || `${index + 1}`,
@@ -189,15 +258,17 @@ const mapCsvRowToProduct = (
     shortDescription,
     longDescription: getCsvValue(row, ['LongDescription', 'details']) || productSpecification || shortDescription,
     imageUrl: finalImageURL,
+    imageUrls,
     imageAlt: productName,
+    keyFeatures,
     specsGroup: {
       voltage,
       capacity,
       weight: getCsvValue(row, ['Weight']) || 'N/A',
       dimensions: getCsvValue(row, ['Dimensions']) || 'N/A',
-      cycleLife: getCsvValue(row, ['CycleLife', 'Cycle Life']) || '2000+ cycles',
+      cycleLife,
       warranty: getCsvValue(row, ['Warranty']) || '3 Years',
-      operatingTemp: getCsvValue(row, ['OperatingTemp', 'Operating Temperature']) || '-20°C to 60°C',
+      operatingTemp,
       application: getCsvValue(row, ['Application']) || 'Residential & Commercial Backup',
     },
     featured: isFeatured,
@@ -237,6 +308,9 @@ const getSpecValue = (
 
 const mapProductDoc = (doc: PayloadProductDoc): Product => {
   const media = typeof doc.image === 'object' && doc.image ? doc.image : null
+  const cycleLife = doc.cycleLife || getSpecValue(doc.specs, ['cycle life', 'cycleLife'])
+  const operatingTemp = getSpecValue(doc.specs, ['operating temperature', 'operating temp', 'temperature range'])
+
   return {
     id: doc.id,
     name: doc.name,
@@ -246,14 +320,15 @@ const mapProductDoc = (doc: PayloadProductDoc): Product => {
     longDescription: doc.tagline || doc.shortDescription || undefined,
     imageUrl: undefined,
     imageAlt: media?.alt || doc.name,
+    keyFeatures: getDefaultKeyFeatures(cycleLife, operatingTemp),
     specsGroup: {
       voltage: doc.voltage || getSpecValue(doc.specs, ['voltage', 'nominal voltage']),
       capacity: doc.capacity || getSpecValue(doc.specs, ['capacity']),
       weight: getSpecValue(doc.specs, ['weight']),
       dimensions: getSpecValue(doc.specs, ['dimensions', 'dimension']),
-      cycleLife: doc.cycleLife || getSpecValue(doc.specs, ['cycle life', 'cycleLife']),
+      cycleLife,
       warranty: doc.warranty || getSpecValue(doc.specs, ['warranty']),
-      operatingTemp: getSpecValue(doc.specs, ['operating temperature', 'operating temp', 'temperature range']),
+      operatingTemp,
       application: getSpecValue(doc.specs, ['application', 'use case']),
     },
     featured: Boolean(doc.isFeatured),
@@ -295,6 +370,7 @@ const getCmsProducts = async (): Promise<Product[]> => {
       return {
         ...mapProductDoc(doc),
         imageUrl: localImageURL,
+        imageUrls: localImageURL ? [localImageURL] : [],
       }
     }) ?? []
   )
