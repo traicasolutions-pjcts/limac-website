@@ -66,7 +66,7 @@ export default function AboutPage() {
                 { value: '2018', label: 'Founded', sub: 'Thrissur, Kerala' },
                 { value: '50,000+', label: 'Installations', sub: 'Across Kerala' },
                 { value: '4', label: 'Product Lines', sub: 'Solar, Moto, 12V, Lighting' },
-                { value: '3 Yrs', label: 'Warranty', sub: 'On Solar Batteries' },
+                { value: '5 Yrs', label: 'Warranty', sub: 'On Solar Batteries' },
               ].map((stat) => (
                 <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center">
                   <div className="text-3xl font-black gradient-text mb-1">{stat.value}</div>
