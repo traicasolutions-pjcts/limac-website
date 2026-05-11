@@ -17,11 +17,11 @@ export const metadata: Metadata = {
 
 const MILESTONES = [
   { year: '2018', event: 'Founded in Thrissur, Kerala — started with solar storage batteries.' },
-  { year: '2019', event: 'Expanded into motorcycle LiFePO4 batteries — Kerala first.' },
+  { year: '2019', event: 'Expanded into Electric scooter LiFePO4 batteries — Kerala first.' },
   { year: '2020', event: 'Launched 12V Series deep cycle battery line for inverters and UPS.' },
   { year: '2021', event: 'Reached 200+ installations — trusted name in South Kerala.' },
   { year: '2022', event: 'Introduced LiFePO4 Lighting series for solar street lights.' },
-  { year: '2024', event: 'Crossed 500+ installations across Kerala.' },
+  { year: '2024', event: 'Crossed 50,000+ installations across Kerala.' },
 ]
 
 const VALUES = [
@@ -53,8 +53,8 @@ export default function AboutPage() {
                 accessible prices, backed by genuine local expertise and support.
               </p>
               <p className="text-limac-muted leading-relaxed">
-                The demand for battery power is surging — mobile devices, solar equipment,
-                automobiles, and industrial machinery are all moving to lithium. As the world
+                The demand for battery power is surging — Energy storage, solar equipment,
+                EV scooters, and industrial machinery are all moving to lithium. As the world
                 transitions to cleaner technologies, LiFePO4 is perfectly positioned to replace
                 fossil fuel dependency. Limac is here to power that transition in Kerala.
               </p>
@@ -64,7 +64,7 @@ export default function AboutPage() {
             <div className="grid grid-cols-2 gap-4">
               {[
                 { value: '2018', label: 'Founded', sub: 'Thrissur, Kerala' },
-                { value: '500+', label: 'Installations', sub: 'Across Kerala' },
+                { value: '50,000+', label: 'Installations', sub: 'Across Kerala' },
                 { value: '4', label: 'Product Lines', sub: 'Solar, Moto, 12V, Lighting' },
                 { value: '3 Yrs', label: 'Warranty', sub: 'On Solar Batteries' },
               ].map((stat) => (
@@ -100,10 +100,10 @@ export default function AboutPage() {
               The problem? LiFePO4 batteries were expensive and hard to find locally. When you
               needed support, you were on your own. Limac was built to solve this — to bring
               genuine Grade A LiFePO4 cells to Kerala homeowners, solar installers, and
-              motorcycle enthusiasts, backed by real local support from our Thrissur team.
+              Electric scooter enthusiasts, backed by real local support from our Thrissur team.
             </p>
             <p>
-              Today, we&apos;ve completed 500+ successful battery installations across Kerala.
+              Today, we&apos;ve completed 50,000+ successful battery installations across Kerala.
               We speak your language — literally. Our team assists customers in Malayalam,
               Tamil, and English, and we&apos;re just a WhatsApp message away.
             </p>

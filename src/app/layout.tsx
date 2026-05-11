@@ -16,14 +16,14 @@ export const metadata: Metadata = {
     template: '%s | Limac Power Tech',
   },
   description:
-    'Limac Power Tech — Premium LiFePO4 batteries for solar storage, motorcycles, and residential systems in Kerala, India. Based in Thrissur since 2018.',
+    'Limac Power Tech — Premium LiFePO4 batteries for solar storage, Electric scooters, and residential systems in Kerala, India. Based in Thrissur since 2018.',
   keywords: [
     'LiFePO4 battery Kerala',
     'solar battery Thrissur',
     'lithium battery Kerala',
     '12V 100AH LiFePO4',
     'solar storage battery India',
-    'motorcycle lithium battery Kerala',
+    'Electric scooter lithium battery Kerala',
   ],
   authors: [{ name: 'Limac Power Tech' }],
   creator: 'Limac Power Tech',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     siteName: 'Limac Power Tech',
     title: 'Limac Power Tech | Kerala\'s Trusted LiFePO4 Battery Specialists',
     description:
-      'Premium LiFePO4 batteries for solar, motorcycles, and homes. Trusted by 500+ customers in Kerala since 2018.',
+      'Premium LiFePO4 batteries for solar, Electric scooters, and homes. Trusted by 50,000+ customers in Kerala since 2018.',
     images: [
       {
         url: ogImagePath,
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Limac Power Tech | LiFePO4 Battery Specialists Kerala',
     description:
-      'Premium lithium iron phosphate batteries for solar, motorcycles, and homes in Kerala.',
+      'Premium lithium iron phosphate batteries for solar, Electric scooters, and homes in Kerala.',
   },
   robots: {
     index: true,

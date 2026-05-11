@@ -32,7 +32,7 @@ export const Products: CollectionConfig = {
       required: true,
       options: [
         { label: 'Solar Storage', value: 'solar-storage' },
-        { label: 'Motorcycle Battery', value: 'motorcycle' },
+        { label: 'Electric scooter Battery', value: 'Electric scooter' },
         { label: '12V Series', value: '12v-series' },
         { label: 'LiFePO4 Lighting', value: 'lifepo4-lighting' },
       ],

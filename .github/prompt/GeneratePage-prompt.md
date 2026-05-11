@@ -18,7 +18,7 @@ code suggestions, completions, and generations.
 | Email            | info@limac.in, sales@limac.in                                  |
 | Domain           | limac.in                                                       |
 | WhatsApp         | +91 99958 11159                                                |
-| Specialisation   | LiFePO4 batteries for solar, motorcycles, residential use      |
+| Specialisation   | LiFePO4 batteries for solar, Electric scooters, residential use      |
 
 ---
 
@@ -329,8 +329,8 @@ async function getProducts(category?: string) {
 ### Homepage (`src/app/page.tsx`) — sections in order:
 1. `<Navbar />` — sticky, dark background
 2. `<HeroBanner />` — full-width, headline + subtext + "Get Quote" CTA
-3. `<StatsBar />` — "Since 2018 | Kerala-based | 500+ installations | ISO certified"
-4. `<ProductCategories />` — 3 visual tiles: Solar Storage, Motorcycle, 12V Series
+3. `<StatsBar />` — "Since 2018 | Kerala-based | 50,000+ installations | ISO certified"
+4. `<ProductCategories />` — 3 visual tiles: Solar Storage, Electric scooter, 12V Series
 5. `<WhyChooseLimac />` — 4 cards: Quality, Warranty, Support, Price
 6. `<FeaturedProducts />` — fetches `featured: true` products from Payload
 7. `<LatestBlogPosts />` — fetches 3 latest published posts from Payload
@@ -427,7 +427,7 @@ interface Product {
   id: string
   name: string
   slug: string
-  category: 'solar-storage' | 'motorcycle' | '12v-series' | 'lifepo4-lighting'
+  category: 'solar-storage' | 'Electric scooter' | '12v-series' | 'lifepo4-lighting'
   shortDescription: string
   description: any // Payload rich text (Slate)
   specsGroup: {
@@ -543,7 +543,7 @@ export const LIMAC = {
 
 export const PRODUCT_CATEGORIES = [
   { label: 'Solar Storage', value: 'solar-storage', description: 'LiFePO4 packs for solar systems' },
-  { label: 'Motorcycle Batteries', value: 'motorcycle', description: 'CCA starter batteries' },
+  { label: 'Electric scooter Batteries', value: 'Electric scooter', description: 'CCA starter batteries' },
   { label: '12V Series', value: '12v-series', description: 'Deep cycle range' },
   { label: 'LiFePO4 Lighting', value: 'lifepo4-lighting', description: 'Lighting systems' },
 ] as const

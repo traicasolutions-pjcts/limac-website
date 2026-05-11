@@ -6,10 +6,10 @@ import { getProducts } from '@/lib/payload'
 export const metadata: Metadata = {
   title: 'Our Products',
   description:
-    'Explore Limac Power Tech\'s full range of LiFePO4 batteries — solar storage, motorcycle starters, 12V deep cycle, and lighting batteries. Best prices in Kerala.',
+    'Explore Limac Power Tech\'s full range of LiFePO4 batteries — solar storage, Electric scooter starters, 12V deep cycle, and lighting batteries. Best prices in Kerala.',
   openGraph: {
     title: 'LiFePO4 Battery Products | Limac Power Tech Kerala',
-    description: 'Premium lithium iron phosphate batteries for every application. Solar storage, motorcycles, inverters and more.',
+    description: 'Premium lithium iron phosphate batteries for every application. Solar storage, Electric scooters, inverters and more.',
     images: [{ url: '/og-image.jpg' }],
     siteName: 'Limac Power Tech',
   },

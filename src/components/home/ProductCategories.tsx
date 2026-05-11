@@ -11,7 +11,7 @@ const CATEGORIES = [
     label: 'Solar Storage',
     value: 'solar-storage',
     description: 'High-capacity LiFePO4 battery packs for residential and commercial solar installations. Store more, waste less.',
-    features: ['12V / 24V / 48V options', '50AH to 200AH capacity', '2000+ cycle life'],
+    features: ['12V / 24V / 48V options', '50AH to 200AH capacity', '6000+ cycle life'],
     color: 'from-yellow-500/10 to-transparent',
     borderColor: 'hover:border-yellow-500/40',
     iconColor: 'text-yellow-400',
@@ -19,9 +19,9 @@ const CATEGORIES = [
   },
   {
     icon: Bike,
-    label: 'Motorcycle Batteries',
-    value: 'motorcycle',
-    description: 'Lightweight lithium starter batteries delivering high CCA ratings for motorcycles, scooters, and ATVs.',
+    label: 'Electric scooter Batteries',
+    value: 'Electric scooter',
+    description: 'Lightweight lithium starter batteries delivering high CCA ratings for Electric scooters, scooters, and ATVs.',
     features: ['70% lighter than lead-acid', 'High CCA rating', '1500+ cycle life'],
     color: 'from-limac-blue/10 to-transparent',
     borderColor: 'hover:border-limac-blue/40',
@@ -68,7 +68,7 @@ export default async function ProductCategories() {
           badge="Product Range"
           title="Battery Solutions for"
           highlight="Every Application"
-          subtitle="From solar storage to motorcycle starters, Limac offers premium LiFePO4 batteries designed for Kerala's climate and usage patterns."
+          subtitle="From solar storage to Electric scooter starters, Limac offers premium LiFePO4 batteries designed for Kerala's climate and usage patterns."
           centered
         />
 

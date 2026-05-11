@@ -40,8 +40,8 @@ export default async function FeaturedProducts() {
                 <Badge variant="green" size="sm">
                   {product.category === 'solar-storage'
                     ? 'Solar Storage'
-                    : product.category === 'motorcycle'
-                    ? 'Motorcycle'
+                    : product.category === 'Electric scooter'
+                    ? 'Electric scooter'
                     : product.category === '12v-series'
                     ? '12V Series'
                     : 'Lighting'}

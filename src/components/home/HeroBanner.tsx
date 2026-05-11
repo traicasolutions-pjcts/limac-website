@@ -42,14 +42,14 @@ export default function HeroBanner() {
 
             <p className="text-limac-muted text-lg leading-relaxed mb-8 max-w-lg">
               Limac Power Tech delivers premium lithium iron phosphate batteries for solar
-              storage, motorcycles, and residential systems. Trusted by 500+ customers
+              storage, Electric scooters, and residential systems. Trusted by 50,000+ customers
               across Kerala since 2018.
             </p>
 
             {/* Trust badges */}
             <div className="flex flex-wrap gap-3 mb-8">
               {[
-                '✓ 2000+ Cycle Life',
+                '✓ 6000+ Cycle Life',
                 '✓ 3 to 5-Year Warranty',
                 '✓ Built-in BMS',
                 '✓ ISO Certified',
@@ -111,9 +111,9 @@ export default function HeroBanner() {
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3 mt-6 w-full">
                   {[
-                    { label: 'Cycle Life', value: '2000+' },
+                    { label: 'Cycle Life', value: '6000+' },
                     { label: 'Efficiency', value: '98%' },
-                    { label: 'Warranty', value: '3 Yrs' },
+                    { label: 'Warranty', value: '5 Yrs' },
                     { label: 'DOD', value: '80%' },
                   ].map((stat) => (
                     <div key={stat.label} className="bg-black/50 rounded-lg p-2 text-center border border-gray-800">
@@ -131,7 +131,7 @@ export default function HeroBanner() {
                 <div className="text-limac-muted text-[10px]">Chemistry</div>
               </div>
               <div className="absolute bottom-12 left-0 bg-limac-navy border border-gray-700 rounded-xl px-3 py-2 text-center shadow-lg">
-                <div className="text-limac-green text-lg font-bold">500+</div>
+                <div className="text-limac-green text-lg font-bold">50,000+</div>
                 <div className="text-limac-muted text-[10px]">Installs</div>
               </div>
             </div>

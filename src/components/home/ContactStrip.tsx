@@ -18,7 +18,7 @@ export default function ContactStrip() {
             </h2>
             <p className="text-limac-muted text-base leading-relaxed mb-8">
               Speak directly with our battery experts in Thrissur. We&apos;ll help you choose the
-              right battery for your solar system, motorcycle, or application — and provide
+              right battery for your solar system, Electric scooter, or application — and provide
               a competitive quote fast.
             </p>
 

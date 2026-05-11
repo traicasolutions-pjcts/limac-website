@@ -116,7 +116,7 @@ const parseCSV = (content: string): CsvProductRow[] => {
 
 const inferCategory = (productName: string, specText: string): Product['category'] => {
   const haystack = `${productName} ${specText}`.toLowerCase()
-  if (haystack.includes('motorcycle') || haystack.includes('cca')) return 'motorcycle'
+  if (haystack.includes('Electric scooter') || haystack.includes('cca')) return 'Electric scooter'
   if (haystack.includes('12v')) return '12v-series'
   if (haystack.includes('street light') || haystack.includes('lighting')) return 'lifepo4-lighting'
   return 'solar-storage'
@@ -245,7 +245,7 @@ const mapCsvRowToProduct = (
   const category = normalizeCategory(getCsvValue(row, ['Category', 'category']), productName, productSpecification)
   const voltage = getCsvValue(row, ['Voltage']) || inferVoltage(productName, productSpecification)
   const capacity = getCsvValue(row, ['Capacity']) || inferCapacity(productName, productSpecification)
-  const cycleLife = getCsvValue(row, ['CycleLife', 'Cycle Life']) || '2000+ cycles'
+  const cycleLife = getCsvValue(row, ['CycleLife', 'Cycle Life']) || '6000+ cycles'
   const operatingTemp = getCsvValue(row, ['OperatingTemp', 'Operating Temperature']) || '-20°C to 60°C'
   const csvKeyFeatures = splitListValue(getCsvValue(row, ['KeyFeatures', 'Key Features', 'Features']))
   const keyFeatures = csvKeyFeatures.length ? csvKeyFeatures : getDefaultKeyFeatures(cycleLife, operatingTemp)
