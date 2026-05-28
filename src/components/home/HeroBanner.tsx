@@ -42,7 +42,7 @@ export default function HeroBanner() {
 
             <p className="text-limac-muted text-lg leading-relaxed mb-8 max-w-lg">
               Limac Power Tech delivers premium lithium iron phosphate batteries for solar
-              storage, Electric scooters, and residential systems. Trusted by 50,000+ customers
+              storage, Electric scooters, Commercial systems and residential systems. Trusted by 50,000+ customers
               across Kerala since 2018.
             </p>
 

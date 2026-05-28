@@ -20,7 +20,7 @@ export default function ProductImageSlideshow({
   alt,
   fallbackLabel,
   className = '',
-  imageClassName = 'object-cover',
+  imageClassName = 'object-contain object-center',
   sizes,
   priority = false,
   showControls = true,
