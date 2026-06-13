@@ -130,6 +130,17 @@ export default function Footer() {
                 </a>
               </li>
               <li>
+                <div className="h-32 overflow-hidden rounded-lg border border-gray-800 bg-limac-black">
+                  <iframe
+                    title="Limac Power Tech map preview"
+                    src={LIMAC.mapEmbed}
+                    className="h-full w-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </li>
+              <li>
                 <a
                   href={LIMAC.maps}
                   target="_blank"

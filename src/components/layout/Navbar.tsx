@@ -52,23 +52,27 @@ export default function Navbar() {
         </div>
 
         {/* Main nav */}
-        <nav className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
+        <nav className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="relative overflow-hidden transition-transform duration-300 group-hover:scale-[1.02]">
                 <Image
-                  src={withBasePath('/logo.webp')}
+                  src={withBasePath('/logo-header-dark.webp')}
                   alt="Limac Power Tech Logo"
-                  width={156}
-                  height={65}
+                  width={1412}
+                  height={424}
                   priority
-                  className="h-11 w-auto"
+                  className="theme-logo-dark h-auto w-24 sm:w-32 lg:w-40 xl:w-48"
                 />
-              </div>
-              <div className="hidden sm:flex flex-col leading-none">
-                <span className="font-bold text-white text-base tracking-tight">Limac</span>
-                <span className="text-limac-green text-[10px] font-medium tracking-widest uppercase">Power Tech</span>
+                <Image
+                  src={withBasePath('/logo-header.webp')}
+                  alt="Limac Power Tech Logo"
+                  width={1412}
+                  height={424}
+                  priority
+                  className="theme-logo-light h-auto w-24 sm:w-32 lg:w-40 xl:w-48"
+                />
               </div>
             </Link>
 

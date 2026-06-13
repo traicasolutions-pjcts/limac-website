@@ -4,27 +4,28 @@ export const LIMAC = {
   tagline: "Kerala's Trusted LiFePO4 Battery Specialists",
   founded: 2018,
   phone: {
-    primary: '+91 99958 11159',
-    secondary: '+91 82899 78663',
-    tertiary: '+91 97466 11159',
+    primary: '+91 81388 01828',
+    secondary: '+91 99958 86909',
+    tertiary: '+91 99958 11159',
   },
-  whatsapp: '919995811159',
+  whatsapp: '918138801828',
   email: {
     info: 'info@limac.in',
     sales: 'sales@limac.in',
   },
   address: {
-    line1: 'Mother Gardens, Private Industrial Zone',
-    line2: 'Puthenkulam Road, Edakunny, Ollur',
+    line1: '14/39, Near Kakkaras Center',
+    line2: 'Kodungallur Shornur Road, Near BPCL Petrol Pump, Urakam',
     city: 'Thrissur',
     state: 'Kerala',
-    pincode: '680306',
+    pincode: '680562',
     country: 'India',
   },
   social: {
     facebook: 'https://facebook.com/limacpowertech',
   },
-  maps: 'https://maps.google.com/?q=Limac+Power+Tech+Thrissur+Kerala',
+  maps: 'https://www.google.com/maps/place/Limac+Power+Tech+Lithium+Battery+Manufacturer/@10.4230575,76.2141532,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba7f18a9542c57d:0xc817cf4a30e57755!8m2!3d10.4230575!4d76.2141532!16s%2Fg%2F11qh4ll4_n?entry=ttu&g_ep=EgoyMDI2MDYxMC4wIKXMDSoASAFQAw%3D%3D',
+  mapEmbed: 'https://maps.google.com/maps?q=Limac+Power+Tech+Lithium+Battery+Manufacturer,+Urakam,+Thrissur,+Kerala+680562&t=&z=17&ie=UTF8&iwloc=&output=embed',
 } as const
 
 export const PRODUCT_CATEGORIES = [

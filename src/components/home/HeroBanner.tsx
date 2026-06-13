@@ -92,16 +92,14 @@ export default function HeroBanner() {
 
               {/* Center battery visual */}
               <div className="absolute inset-12 bg-gradient-to-br from-gray-900 to-limac-black rounded-2xl border border-gray-800 flex flex-col items-center justify-center p-6">
-                <div className="w-16 h-24 relative mb-4">
-                  <div className="absolute inset-0 bg-limac-green/20 border-2 border-limac-green rounded-lg" />
+                <div className="w-16 h-24 relative mb-4 battery-charge-shell">
+                  <div className="absolute inset-0 bg-limac-green/10 border-2 border-limac-green rounded-lg shadow-[0_0_22px_rgba(180,230,50,0.2)]" />
                   <div className="absolute top-1 left-1/2 -translate-x-1/2 w-6 h-2 bg-limac-green rounded-sm -mt-2" />
-                  <div
-                    className="absolute bottom-0 left-0 right-0 bg-limac-green/40 rounded-b-md"
-                    style={{ height: '75%' }}
-                  />
+                  <div className="battery-charge-fill absolute bottom-1 left-1 right-1 rounded-b-md bg-gradient-to-t from-limac-green to-limac-green/45" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Zap size={24} className="text-limac-green" fill="currentColor" />
+                    <Zap size={24} className="battery-charge-zap text-limac-green" fill="currentColor" />
                   </div>
+                  <div className="battery-charge-spark absolute -right-4 top-7 h-2 w-2 rounded-full bg-limac-green" />
                 </div>
                 <div className="text-center">
                   <div className="text-limac-green font-bold text-2xl">LiFePO4</div>

@@ -136,7 +136,7 @@ export default function ContactPage() {
             <div className="rounded-xl overflow-hidden border border-gray-800 h-56">
               <iframe
                 title="Limac Power Tech Location — Thrissur, Kerala"
-                src="https://maps.google.com/maps?q=Ollur,+Thrissur,+Kerala&t=&z=14&ie=UTF8&iwloc=&output=embed"
+                src={LIMAC.mapEmbed}
                 className="w-full h-full"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"

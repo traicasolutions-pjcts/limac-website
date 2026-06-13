@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LIMAC } from '@/lib/constants'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | Limac Power Tech',
@@ -122,12 +123,13 @@ export default function PrivacyPolicyPage() {
           </p>
           <address className="text-limac-muted not-italic mt-3 space-y-1">
             <p className="text-white font-semibold">Limac Power Tech</p>
-            <p>Kavalappara, Thrissur, Kerala — 680586, India</p>
+            <p>{LIMAC.address.line1}, {LIMAC.address.line2}</p>
+            <p>{LIMAC.address.city}, {LIMAC.address.state} - {LIMAC.address.pincode}, {LIMAC.address.country}</p>
             <p>
-              <a href="mailto:info@limac.in" className="text-limac-cyan hover:underline">info@limac.in</a>
+              <a href={`mailto:${LIMAC.email.info}`} className="text-limac-cyan hover:underline">{LIMAC.email.info}</a>
             </p>
             <p>
-              <a href="tel:+919995811159" className="text-limac-cyan hover:underline">+91 99958 11159</a>
+              <a href={`tel:${LIMAC.phone.primary.replace(/\s/g, '')}`} className="text-limac-cyan hover:underline">{LIMAC.phone.primary}</a>
             </p>
           </address>
         </div>

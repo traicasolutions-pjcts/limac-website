@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LIMAC } from '@/lib/constants'
 
 export const metadata: Metadata = {
   title: 'Terms of Service | Limac Power Tech',
@@ -122,9 +123,10 @@ export default function TermsPage() {
           </p>
           <address className="text-limac-muted not-italic mt-3 space-y-1">
             <p className="text-white font-semibold">Limac Power Tech</p>
-            <p>Kavalappara, Thrissur, Kerala — 680586, India</p>
+            <p>{LIMAC.address.line1}, {LIMAC.address.line2}</p>
+            <p>{LIMAC.address.city}, {LIMAC.address.state} - {LIMAC.address.pincode}, {LIMAC.address.country}</p>
             <p>
-              <a href="mailto:info@limac.in" className="text-limac-cyan hover:underline">info@limac.in</a>
+              <a href={`mailto:${LIMAC.email.info}`} className="text-limac-cyan hover:underline">{LIMAC.email.info}</a>
             </p>
           </address>
         </div>

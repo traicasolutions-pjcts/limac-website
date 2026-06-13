@@ -4,25 +4,25 @@
 @tailwind utilities;
 
 :root {
-  --limac-black: 10 10 15;
-  --limac-navy: 5 20 45;
-  --limac-blue: 0 100 180;
-  --limac-cyan: 0 180 220;
+  --limac-black: 18 33 43;
+  --limac-navy: 26 48 60;
+  --limac-blue: 24 122 176;
+  --limac-cyan: 0 194 220;
   --limac-green: 180 230 50;
   --limac-green-logo: 180 230 50;
   --limac-white: 255 255 255;
-  --limac-muted: 210 220 235;
+  --limac-muted: 218 230 238;
 }
 
 .light {
-  --limac-black: 246 248 252;
-  --limac-navy: 255 255 255;
-  --limac-blue: 20 72 132;
-  --limac-cyan: 9 118 161;
-  --limac-green: 120 156 32;
-  --limac-green-logo: 120 156 32;
-  --limac-white: 15 23 42;
-  --limac-muted: 68 84 104;
+  --limac-black: 248 251 247;
+  --limac-navy: 235 244 241;
+  --limac-blue: 14 96 150;
+  --limac-cyan: 0 139 166;
+  --limac-green: 82 145 31;
+  --limac-green-logo: 101 165 34;
+  --limac-white: 18 32 45;
+  --limac-muted: 76 91 108;
   color-scheme: light;
 }
 
@@ -71,30 +71,199 @@ body {
   transform: translateY(-4px) scale(1.01);
 }
 
+.theme-logo-light {
+  display: none;
+}
+
+.light .theme-logo-dark {
+  display: none;
+}
+
+.light .theme-logo-light {
+  display: block;
+}
+
 .light .text-white {
-  color: rgb(15 23 42) !important;
+  color: rgb(18 32 45) !important;
+}
+
+.light .text-limac-black {
+  color: rgb(12 24 36) !important;
 }
 
 .light .bg-gray-900 {
   background-color: rgb(255 255 255) !important;
+  box-shadow: 0 14px 40px rgb(15 23 42 / 0.06);
 }
 
 .light .bg-gray-800,
 .light .bg-black\/50 {
-  background-color: rgb(241 245 249) !important;
+  background-color: rgb(239 247 244) !important;
 }
 
 .light .border-gray-800,
 .light .border-gray-700 {
-  border-color: rgb(203 213 225) !important;
+  border-color: rgb(190 209 204) !important;
 }
 
 .light .shadow-black\/50 {
   --tw-shadow-color: rgb(148 163 184 / 0.35) !important;
 }
 
+.light .bg-limac-green {
+  background-color: rgb(102 178 38) !important;
+}
+
+.light .hover\:bg-green-400:hover {
+  background-color: rgb(125 199 52) !important;
+}
+
+.light .hover\:bg-white\/5:hover {
+  background-color: rgb(82 145 31 / 0.09) !important;
+}
+
+.light .bg-limac-green\/10 {
+  background-color: rgb(82 145 31 / 0.12) !important;
+}
+
+.light .from-gray-900,
+.light .from-gray-800 {
+  --tw-gradient-from: rgb(255 255 255) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.light .from-limac-navy {
+  --tw-gradient-from: rgb(225 241 237) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(225 241 237 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.light .via-limac-black {
+  --tw-gradient-to: rgb(248 251 247 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(239 247 244) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+
+.light .to-limac-black {
+  --tw-gradient-to: rgb(226 240 236) var(--tw-gradient-to-position);
+}
+
+.light .border-limac-green\/30,
+.light .border-limac-green\/40 {
+  border-color: rgb(82 145 31 / 0.38) !important;
+}
+
+.light .card-hover:hover {
+  box-shadow: 0 18px 42px rgb(82 145 31 / 0.14);
+}
+
+.light .gradient-text {
+  background: linear-gradient(135deg, rgb(72 132 26), rgb(0 122 148));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.light .battery-charge-shell {
+  filter: drop-shadow(0 0 18px rgba(82, 145, 31, 0.2));
+}
+
+.light .battery-charge-spark {
+  box-shadow: 0 0 16px rgba(82, 145, 31, 0.75);
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+.battery-charge-shell {
+  filter: drop-shadow(0 0 18px rgba(180, 230, 50, 0.18));
+}
+
+.battery-charge-fill {
+  animation: battery-fill 3.2s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+.battery-charge-zap {
+  animation: battery-zap 3.2s ease-in-out infinite;
+}
+
+.battery-charge-spark {
+  animation: battery-spark 3.2s ease-in-out infinite;
+  box-shadow: 0 0 16px rgba(180, 230, 50, 0.8);
+}
+
+@keyframes battery-fill {
+  0%,
+  8% {
+    height: 8%;
+    opacity: 0.45;
+  }
+  55% {
+    height: 58%;
+    opacity: 0.8;
+  }
+  82%,
+  100% {
+    height: calc(100% - 0.5rem);
+    opacity: 1;
+  }
+}
+
+@keyframes battery-zap {
+  0%,
+  20% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  82%,
+  100% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes battery-spark {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.6);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(8px) scale(1);
+  }
+  82%,
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battery-charge-fill,
+  .battery-charge-zap,
+  .battery-charge-spark {
+    animation: none;
+  }
+
+  .battery-charge-fill {
+    height: calc(100% - 0.5rem);
+    opacity: 1;
+  }
+
+  .battery-charge-zap {
+    opacity: 1;
+  }
+
+  .battery-charge-spark {
+    opacity: 0;
   }
 }
