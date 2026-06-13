@@ -4,7 +4,7 @@ import { LIMAC } from '@/lib/constants'
 
 export default function HeroBanner() {
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden bg-limac-black">
+    <section className="relative flex items-center overflow-hidden bg-limac-black lg:min-h-screen">
       {/* Background grid pattern */}
       <div
         className="absolute inset-0 opacity-[0.03]"
@@ -22,7 +22,7 @@ export default function HeroBanner() {
       <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-limac-cyan/5 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-limac-green/5 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative max-w-6xl mx-auto px-4 pt-28 pb-16 w-full">
+      <div className="relative max-w-6xl mx-auto px-4 pt-24 pb-10 lg:pt-28 lg:pb-16 w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left: Text */}
           <div>
@@ -84,38 +84,38 @@ export default function HeroBanner() {
           </div>
 
           {/* Right: Visual */}
-          <div className="hidden lg:flex items-center justify-center">
-            <div className="relative w-full max-w-md aspect-square">
+          <div className="flex items-center justify-center">
+            <div className="relative w-full max-w-[21rem] sm:max-w-sm lg:max-w-md aspect-square">
               {/* Outer ring */}
               <div className="absolute inset-0 rounded-full border border-limac-green/10 animate-[spin_30s_linear_infinite]" />
               <div className="absolute inset-4 rounded-full border border-limac-cyan/10 animate-[spin_20s_linear_infinite_reverse]" />
 
               {/* Center battery visual */}
-              <div className="absolute inset-12 bg-gradient-to-br from-gray-900 to-limac-black rounded-2xl border border-gray-800 flex flex-col items-center justify-center p-6">
-                <div className="w-16 h-24 relative mb-4 battery-charge-shell">
+              <div className="absolute inset-8 sm:inset-10 lg:inset-12 bg-gradient-to-br from-gray-900 to-limac-black rounded-2xl border border-gray-800 flex flex-col items-center justify-center p-4 lg:p-6">
+                <div className="w-10 h-16 sm:w-12 sm:h-20 lg:w-16 lg:h-24 relative mb-2 lg:mb-4 battery-charge-shell">
                   <div className="absolute inset-0 bg-limac-green/10 border-2 border-limac-green rounded-lg shadow-[0_0_22px_rgba(180,230,50,0.2)]" />
-                  <div className="absolute top-1 left-1/2 -translate-x-1/2 w-6 h-2 bg-limac-green rounded-sm -mt-2" />
+                  <div className="absolute top-1 left-1/2 -translate-x-1/2 w-4 lg:w-6 h-1.5 lg:h-2 bg-limac-green rounded-sm -mt-2" />
                   <div className="battery-charge-fill absolute bottom-1 left-1 right-1 rounded-b-md bg-gradient-to-t from-limac-green to-limac-green/45" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Zap size={24} className="battery-charge-zap text-limac-green" fill="currentColor" />
+                    <Zap size={24} className="battery-charge-zap h-4 w-4 lg:h-6 lg:w-6 text-limac-green" fill="currentColor" />
                   </div>
-                  <div className="battery-charge-spark absolute -right-4 top-7 h-2 w-2 rounded-full bg-limac-green" />
+                  <div className="battery-charge-spark absolute -right-3 lg:-right-4 top-5 lg:top-7 h-1.5 lg:h-2 w-1.5 lg:w-2 rounded-full bg-limac-green" />
                 </div>
                 <div className="text-center">
-                  <div className="text-limac-green font-bold text-2xl">LiFePO4</div>
-                  <div className="text-limac-muted text-xs mt-1">Lithium Iron Phosphate</div>
+                  <div className="text-limac-green font-bold text-xl lg:text-2xl">LiFePO4</div>
+                  <div className="text-limac-muted text-[11px] lg:text-xs mt-1">Lithium Iron Phosphate</div>
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 gap-3 mt-6 w-full">
+                <div className="grid grid-cols-2 gap-2 lg:gap-3 mt-4 lg:mt-6 w-full">
                   {[
                     { label: 'Cycle Life', value: '6000+' },
                     { label: 'Efficiency', value: '98%' },
                     { label: 'Warranty', value: '5 Yrs' },
                     { label: 'DOD', value: '80%' },
                   ].map((stat) => (
-                    <div key={stat.label} className="bg-black/50 rounded-lg p-2 text-center border border-gray-800">
-                      <div className="text-white font-bold text-sm">{stat.value}</div>
+                    <div key={stat.label} className="bg-black/50 rounded-lg px-2 py-1.5 lg:p-2 text-center border border-gray-800">
+                      <div className="text-white font-bold text-xs lg:text-sm">{stat.value}</div>
                       <div className="text-limac-muted text-[10px]">{stat.label}</div>
                     </div>
                   ))}
@@ -123,21 +123,21 @@ export default function HeroBanner() {
               </div>
 
               {/* Floating badges */}
-              <div className="absolute top-6 right-0 bg-limac-navy border border-gray-700 rounded-xl px-3 py-2 text-center shadow-lg">
+              <div className="absolute top-5 right-2 lg:top-6 lg:right-0 bg-limac-navy border border-gray-700 rounded-xl px-2.5 lg:px-3 py-1.5 lg:py-2 text-center shadow-lg">
                 <Shield size={14} className="text-limac-green mx-auto mb-1" />
-                <div className="text-white text-xs font-semibold">Safe</div>
-                <div className="text-limac-muted text-[10px]">Chemistry</div>
+                <div className="text-white text-[11px] lg:text-xs font-semibold">Safe</div>
+                <div className="text-limac-muted text-[9px] lg:text-[10px]">Chemistry</div>
               </div>
-              <div className="absolute bottom-12 left-0 bg-limac-navy border border-gray-700 rounded-xl px-3 py-2 text-center shadow-lg">
-                <div className="text-limac-green text-lg font-bold">50,000+</div>
-                <div className="text-limac-muted text-[10px]">Installs</div>
+              <div className="absolute bottom-7 left-2 lg:bottom-12 lg:left-0 bg-limac-navy border border-gray-700 rounded-xl px-2.5 lg:px-3 py-1.5 lg:py-2 text-center shadow-lg">
+                <div className="text-limac-green text-sm lg:text-lg font-bold">50,000+</div>
+                <div className="text-limac-muted text-[9px] lg:text-[10px]">Installs</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Scroll indicator */}
-        <div className="mt-16 flex justify-center">
+        <div className="mt-6 lg:mt-16 flex justify-center">
           <div className="flex flex-col items-center gap-2 text-limac-muted text-xs animate-bounce">
             <span>Scroll to explore</span>
             <div className="w-px h-8 bg-gradient-to-b from-limac-green/50 to-transparent" />
