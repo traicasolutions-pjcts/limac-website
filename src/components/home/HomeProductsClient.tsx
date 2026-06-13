@@ -72,8 +72,8 @@ export default function HomeProductsClient({ products }: HomeProductsClientProps
               alt={product.imageAlt || product.name}
               fallbackLabel={`${product.specsGroup.voltage} - ${product.specsGroup.capacity}`}
               sizes="(max-width: 768px) 100vw, 33vw"
-              className="h-44 bg-gradient-to-br from-gray-800 to-limac-black rounded-xl border border-gray-800 mb-5 group-hover:border-limac-green/20 transition-colors"
-              imageClassName="object-cover transition-transform duration-500 group-hover:scale-110"
+              className="h-64 bg-white rounded-xl border border-gray-800 mb-5 group-hover:border-limac-green/20 transition-colors"
+              imageClassName="object-contain object-center p-3 transition-transform duration-500 group-hover:scale-105"
               showControls={(product.imageUrls?.length ?? 0) > 1}
             />
 

@@ -81,8 +81,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
               alt={product.imageAlt || product.name}
               fallbackLabel={`${product.specsGroup.voltage} - ${product.specsGroup.capacity}`}
               sizes="(max-width: 1024px) 100vw, 50vw"
-              className="bg-gradient-to-br from-gray-900 to-limac-black border border-gray-800 rounded-2xl h-80 mb-4"
-              imageClassName="object-cover"
+              className="bg-white border border-gray-800 rounded-2xl h-[32rem] md:h-[36rem] lg:h-[40rem] mb-4"
+              imageClassName="object-contain object-center p-4 md:p-6"
               priority
             />
 
