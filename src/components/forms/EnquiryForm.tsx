@@ -10,6 +10,8 @@ interface EnquiryFormProps {
   productName?: string
 }
 
+const ENQUIRY_FORM_DISABLED = true
+
 export default function EnquiryForm({ productName }: EnquiryFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -27,6 +29,11 @@ export default function EnquiryForm({ productName }: EnquiryFormProps) {
   })
 
   const onSubmit = async (data: EnquiryFormData) => {
+    if (ENQUIRY_FORM_DISABLED) {
+      setSubmitError('Online enquiry submission is temporarily disabled. Please contact us by WhatsApp or phone.')
+      return
+    }
+
     setIsLoading(true)
     setSubmitError(null)
     try {
@@ -86,7 +93,7 @@ export default function EnquiryForm({ productName }: EnquiryFormProps) {
         {productName ? `Enquire about ${productName}` : 'Send an Enquiry'}
       </h3>
       <p className="text-limac-muted text-sm mb-6">
-        Fill in your details and we&apos;ll get back to you with a quote or more information.
+        Online enquiry submission is temporarily disabled. Please contact us by WhatsApp or phone.
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -204,10 +211,15 @@ export default function EnquiryForm({ productName }: EnquiryFormProps) {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || ENQUIRY_FORM_DISABLED}
           className="w-full inline-flex items-center justify-center gap-2 bg-limac-green hover:bg-green-400 disabled:opacity-60 disabled:cursor-not-allowed text-limac-black font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
         >
-          {isLoading ? (
+          {ENQUIRY_FORM_DISABLED ? (
+            <>
+              <Send size={18} />
+              Enquiry Form Temporarily Disabled
+            </>
+          ) : isLoading ? (
             <>
               <Loader2 size={18} className="animate-spin" />
               Sending...

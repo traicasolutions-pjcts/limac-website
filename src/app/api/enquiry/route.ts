@@ -3,6 +3,8 @@ import { Resend } from 'resend'
 import { LIMAC } from '@/lib/constants'
 import type { EnquiryFormData } from '@/lib/types'
 
+const ENQUIRY_FORM_DISABLED = true
+
 const getResendClient = () => {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return null
@@ -41,6 +43,13 @@ async function saveEnquiryToPayload(data: {
 }
 
 export async function POST(request: NextRequest) {
+  if (ENQUIRY_FORM_DISABLED) {
+    return NextResponse.json(
+      { error: 'Online enquiry submission is temporarily disabled. Please contact us by WhatsApp or phone.' },
+      { status: 503 }
+    )
+  }
+
   try {
     const body = await request.json()
     const { name, phone, email, productInterest, message } = body as EnquiryFormData

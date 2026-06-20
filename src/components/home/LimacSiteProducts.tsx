@@ -13,7 +13,7 @@ export default async function LimacSiteProducts() {
         <SectionHeader
           badge="Our Products"
           title="Limac Battery Catalogue"
-          subtitle="Browse every product from the local CSV catalogue, with category filters and product image slideshows where multiple images are listed."
+          subtitle=""
           centered
         />
 
