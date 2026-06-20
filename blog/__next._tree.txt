@@ -1,2 +1,2 @@
 :HL["/limac-website/_next/static/chunks/15b35d3le044t.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"(site)","param":null,"prefetchHints":0,"slots":{"children":{"name":"blog","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}},"staleTime":300,"buildId":"aPsp-yezpa4PwMFAVuLGo"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"(site)","param":null,"prefetchHints":0,"slots":{"children":{"name":"blog","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}}}},"staleTime":300,"buildId":"B8olhsExh6UzxzHew2Jau"}
