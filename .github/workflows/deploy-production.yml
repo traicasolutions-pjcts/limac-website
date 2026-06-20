@@ -24,6 +24,9 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      NEXT_PUBLIC_SITE_URL: https://www.limac.in
+      PAYLOAD_URL: https://www.limac.in
+      PRODUCT_DATA_SOURCE: csv
 
     steps:
       - name: Checkout code
@@ -46,6 +49,10 @@ jobs:
 
       - name: Build production artifact
         run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.limac.in
+          PAYLOAD_URL: https://www.limac.in
+          PRODUCT_DATA_SOURCE: csv
 
       - name: Deploy production artifact
         id: deploy
