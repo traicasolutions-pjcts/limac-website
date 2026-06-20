@@ -74,6 +74,14 @@ The repository includes a manual GitHub Actions workflow for production deployme
 .github/workflows/deploy-production.yml
 ```
 
+Production deployments are intentionally manual. The project disables Vercel's automatic Git deployments with:
+
+```text
+vercel.json
+```
+
+The legacy GitHub Pages workflow is also manual-only and should not be used for the Vercel production site.
+
 Add these repository secrets in GitHub before running the workflow:
 
 ```text
@@ -92,6 +100,13 @@ To run the workflow:
 6. Run the workflow from the branch that should be deployed.
 
 Keep production environment variables in Vercel. The workflow pulls the production environment from Vercel during deployment.
+
+Recommended release process:
+
+1. Merge changes into `main`.
+2. Open `Actions -> Deploy Production`.
+3. Run the workflow from `main`.
+4. Confirm the production domain after the workflow completes.
 
 ## Generate `PAYLOAD_SECRET`
 

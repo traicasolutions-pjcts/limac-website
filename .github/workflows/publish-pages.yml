@@ -1,9 +1,6 @@
-name: Publish Pages
+name: Publish Pages Legacy
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
