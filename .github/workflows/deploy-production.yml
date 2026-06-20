@@ -47,6 +47,12 @@ jobs:
       - name: Pull Vercel production environment
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
+      - name: Verify deployment source
+        run: |
+          git rev-parse --short HEAD
+          grep -n "getSiteUrlObject" src/app/layout.tsx
+          test -n "$NEXT_PUBLIC_SITE_URL"
+
       - name: Build production artifact
         run: vercel build --prod --token="$VERCEL_TOKEN"
         env:

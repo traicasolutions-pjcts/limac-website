@@ -10,3 +10,11 @@ export const getSiteUrl = () => {
     return DEFAULT_SITE_URL
   }
 }
+
+export const getSiteUrlObject = () => {
+  try {
+    return new URL(getSiteUrl())
+  } catch {
+    return new URL(DEFAULT_SITE_URL)
+  }
+}

@@ -5,14 +5,14 @@ import Footer from '@/components/layout/Footer'
 import WhatsAppButton from '@/components/common/WhatsAppButton'
 import ChatBot from '@/components/chat/ChatBot'
 import { withBasePath } from '@/lib/basePath'
-import { getSiteUrl } from '@/lib/siteUrl'
+import { getSiteUrl, getSiteUrlObject } from '@/lib/siteUrl'
 
 const logoPath = withBasePath('/logo.webp')
 const ogImagePath = withBasePath('/og-image.jpg')
 const siteUrl = getSiteUrl()
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: getSiteUrlObject(),
   title: {
     default: 'Limac Power Tech | Kerala\'s Trusted LiFePO4 Battery Specialists',
     template: '%s | Limac Power Tech',
