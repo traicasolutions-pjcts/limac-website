@@ -2,7 +2,7 @@ name: Trivy Security Scan
 
 on:
   push:
-    branches: [main]
+    branches: [main, seurity-add]
   pull_request:
     branches: [main]
   schedule:
@@ -16,42 +16,110 @@ permissions:
 
 jobs:
   trivy:
-    name: Filesystem Vulnerability Scan
+    name: Vulnerability, Secret, IaC, License and SBOM Scan
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy and upload SARIF
+      - name: Generate GitHub Security SARIF
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,secret,misconfig
+          scanners: vuln,secret,misconfig,license
           vuln-type: os,library
-          severity: HIGH,CRITICAL
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           ignore-unfixed: true
           format: sarif
           output: trivy-results.sarif
           exit-code: 0
 
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         continue-on-error: true
         with:
           sarif_file: trivy-results.sarif
 
-      - name: Upload Trivy SARIF artifact
+      - name: Generate full Trivy table report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig,license
+          vuln-type: os,library
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          output: trivy-full-report.txt
+          exit-code: 0
+          skip-setup-trivy: true
+
+      - name: Generate IaC and static policy report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          format: table
+          output: trivy-iac-static-report.txt
+          exit-code: 0
+          skip-setup-trivy: true
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: trivy-sbom.cdx.json
+          exit-code: 0
+          skip-setup-trivy: true
+
+      - name: Generate SPDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: spdx-json
+          output: trivy-sbom.spdx.json
+          exit-code: 0
+          skip-setup-trivy: true
+
+      - name: Upload Trivy reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: trivy-results
-          path: trivy-results.sarif
+          name: trivy-security-reports
+          path: |
+            trivy-results.sarif
+            trivy-full-report.txt
+            trivy-iac-static-report.txt
+            trivy-sbom.cdx.json
+            trivy-sbom.spdx.json
           retention-days: 30
 
-      - name: Fail on high or critical findings
+      - name: Add report links to workflow summary
+        if: always()
+        run: |
+          {
+            echo "## Trivy scan coverage"
+            echo ""
+            echo "| Capability | Enabled | Output |"
+            echo "| --- | --- | --- |"
+            echo "| Vulnerability scanning | Yes | SARIF, table report |"
+            echo "| Secret scanning | Yes | SARIF, table report |"
+            echo "| Misconfiguration / IaC scanning | Yes | SARIF, IaC report |"
+            echo "| License scanning | Yes | SARIF, table report |"
+            echo "| SBOM generation | Yes | CycloneDX and SPDX JSON |"
+            echo "| SAST-style static checks | Limited | Trivy config/static policy checks |"
+            echo ""
+            echo "Download the **trivy-security-reports** artifact for the full reports."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on high or critical security findings
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
