@@ -1,0 +1,98 @@
+from datetime import date, datetime
+from typing import Any
+
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo import ReturnDocument
+
+from app.models.enums import ProductStatus
+from app.schemas.products import ProductMasterIn
+from app.utils.serials import normalize_serial
+from app.utils.time import utc_now
+
+PROTECTED_PRODUCT_STATUSES = {
+    ProductStatus.REGISTERED,
+    ProductStatus.BLOCKED,
+    ProductStatus.REPLACED,
+}
+
+
+def _serialize_date(value: date | datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def product_input_to_document(product: ProductMasterIn) -> dict[str, Any]:
+    now = utc_now()
+    serial_normalized = normalize_serial(product.serial_number)
+    source_record_id = product.source_record_id or f"initial:{serial_normalized}"
+    return {
+        "serial_number": product.serial_number.strip(),
+        "serial_normalized": serial_normalized,
+        "product_model": product.product_model.strip(),
+        "product_category": product.product_category.strip(),
+        "warranty_months": product.warranty_months,
+        "manufactured_at": _serialize_date(product.manufactured_at),
+        "sold_at": _serialize_date(product.sold_at),
+        "dealer_code": product.dealer_code.strip() if product.dealer_code else None,
+        "status": ProductStatus.AVAILABLE,
+        "source_system": product.source_system,
+        "source_record_id": source_record_id,
+        "source_updated_at": _serialize_date(product.source_updated_at),
+        "sync_version": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+class ProductRepository:
+    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+        self.collection = db.products
+
+    async def get_by_serial(self, serial_number: str) -> dict[str, Any] | None:
+        return await self.collection.find_one({"serial_normalized": normalize_serial(serial_number)})
+
+    async def upsert_from_import(self, product: ProductMasterIn, dry_run: bool) -> tuple[str, str | None]:
+        doc = product_input_to_document(product)
+        existing = await self.collection.find_one({"serial_normalized": doc["serial_normalized"]})
+        if existing and existing.get("status") in PROTECTED_PRODUCT_STATUSES:
+            return "SKIPPED", f"Existing product is {existing['status']} and was not overwritten."
+
+        comparable = {
+            key: value
+            for key, value in doc.items()
+            if key not in {"created_at", "updated_at", "status", "sync_version"}
+        }
+        if existing:
+            existing_comparable = {
+                key: existing.get(key)
+                for key in comparable
+            }
+            if existing_comparable == comparable:
+                return "UNCHANGED", None
+            if dry_run:
+                return "UPDATED", "Dry run only; no database changes were written."
+            await self.collection.update_one(
+                {"_id": existing["_id"]},
+                {
+                    "$set": {
+                        **comparable,
+                        "updated_at": utc_now(),
+                    },
+                    "$inc": {"sync_version": 1},
+                },
+            )
+            return "UPDATED", None
+
+        if dry_run:
+            return "INSERTED", "Dry run only; no database changes were written."
+        await self.collection.insert_one(doc)
+        return "INSERTED", None
+
+    async def mark_registered(self, serial_number: str) -> dict[str, Any] | None:
+        return await self.collection.find_one_and_update(
+            {
+                "serial_normalized": normalize_serial(serial_number),
+                "status": {"$nin": list(PROTECTED_PRODUCT_STATUSES - {ProductStatus.REGISTERED})},
+            },
+            {"$set": {"status": ProductStatus.REGISTERED, "updated_at": utc_now()}},
+            return_document=ReturnDocument.AFTER,
+        )
