@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.config import Settings, get_settings
@@ -11,6 +11,7 @@ from app.schemas.registrations import (
     WarrantyRegistrationCreate,
     WarrantyRegistrationCreated,
 )
+from app.services.captcha import CaptchaVerificationError, verify_turnstile_token
 from app.services.registrations import create_warranty_registration, lookup_registration_status
 from app.storage.cloudinary_storage import (
     StorageConfigurationError,
@@ -25,14 +26,24 @@ router = APIRouter(prefix="/warranty-registrations", tags=["public-registrations
 @router.post("", response_model=WarrantyRegistrationCreated, status_code=status.HTTP_202_ACCEPTED)
 async def create_registration(
     payload: WarrantyRegistrationCreate,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     db: AsyncIOMotorDatabase = Depends(db_dependency),
+    settings: Settings = Depends(get_settings),
 ) -> WarrantyRegistrationCreated:
     if not payload.warranty_terms_consent or not payload.privacy_policy_consent:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Warranty terms and privacy policy consent are required.",
         )
+    try:
+        await verify_turnstile_token(
+            settings,
+            payload.turnstile_token,
+            request.client.host if request.client else None,
+        )
+    except CaptchaVerificationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return await create_warranty_registration(
         db,
         payload,

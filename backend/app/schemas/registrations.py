@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import RegistrationStatus
 
@@ -19,6 +19,13 @@ class PurchaseSnapshot(BaseModel):
     invoice_number: str = Field(min_length=1, max_length=80)
     dealer_name: str = Field(min_length=2, max_length=160)
     dealer_code: str | None = Field(default=None, max_length=80)
+
+    @field_validator("purchase_date")
+    @classmethod
+    def purchase_date_must_not_be_future(cls, value: date) -> date:
+        if value > date.today():
+            raise ValueError("Purchase date cannot be greater than today.")
+        return value
 
 
 class WarrantyRegistrationCreate(BaseModel):

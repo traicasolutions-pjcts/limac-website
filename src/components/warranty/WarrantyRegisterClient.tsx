@@ -1,10 +1,11 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Check, ChevronLeft, ChevronRight, FileUp, Loader2 } from 'lucide-react'
 import Badge from '@/components/common/Badge'
+import TurnstileWidget from '@/components/warranty/TurnstileWidget'
 import { createWarrantyRegistration, uploadWarrantyBill } from '@/services/warrantyApi'
 import type { WarrantyRegistrationPayload } from '@/types/warranty'
 import { maskMobile, maskSerial, validateBillFile } from '@/validation/warranty'
@@ -31,10 +32,14 @@ export default function WarrantyRegisterClient() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState(emptyForm)
   const [bill, setBill] = useState<File | null>(null)
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const [captchaError, setCaptchaError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const billError = useMemo(() => validateBillFile(bill), [bill])
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const captchaSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
   function updateField(field: keyof typeof emptyForm, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -56,6 +61,15 @@ export default function WarrantyRegisterClient() {
     )
   }
 
+  const handleTurnstileToken = useCallback((token: string) => {
+    setTurnstileToken(token)
+    if (token) setCaptchaError(null)
+  }, [])
+
+  const handleTurnstileError = useCallback((message: string) => {
+    setCaptchaError(message)
+  }, [])
+
   async function submit(event: FormEvent) {
     event.preventDefault()
     setError(null)
@@ -66,6 +80,14 @@ export default function WarrantyRegisterClient() {
     }
     if (!form.warrantyTermsConsent || !form.privacyPolicyConsent) {
       setError('Accept the warranty terms and privacy policy to continue.')
+      return
+    }
+    if (!captchaSiteKey) {
+      setError('Captcha site key is missing. Add NEXT_PUBLIC_TURNSTILE_SITE_KEY and restart the frontend.')
+      return
+    }
+    if (captchaSiteKey && !turnstileToken) {
+      setError(captchaError || 'Complete captcha verification before submitting.')
       return
     }
     if (billError) {
@@ -92,7 +114,7 @@ export default function WarrantyRegisterClient() {
       },
       warranty_terms_consent: form.warrantyTermsConsent,
       privacy_policy_consent: form.privacyPolicyConsent,
-      turnstile_token: 'local-placeholder',
+      turnstile_token: turnstileToken || 'local-placeholder',
     }
 
     setLoading(true)
@@ -121,6 +143,7 @@ export default function WarrantyRegisterClient() {
   function validateForm() {
     if (form.addressLine.trim().length < 5) return 'Address line must have at least 5 characters.'
     if (!/^\d{6}$/.test(form.pinCode.trim())) return 'PIN code must be exactly 6 digits.'
+    if (form.purchaseDate && form.purchaseDate > today) return 'Purchase date cannot be greater than today.'
     if (form.invoiceNumber.trim().length < 1) return 'Invoice or bill number is required.'
     if (form.dealerName.trim().length < 2) return 'Dealer or shop name must have at least 2 characters.'
     return null
@@ -205,6 +228,7 @@ export default function WarrantyRegisterClient() {
             required
             hint="Select the purchase date shown on the bill."
             type="date"
+            max={today}
             value={form.purchaseDate}
             onChange={(value) => updateField('purchaseDate', value)}
           />
@@ -266,6 +290,23 @@ export default function WarrantyRegisterClient() {
               checked={form.privacyPolicyConsent}
               onChange={(checked) => updateField('privacyPolicyConsent', checked)}
             />
+            <div className="rounded-lg border border-gray-700 bg-limac-black p-4">
+              <h3 className="text-sm font-semibold text-white">
+                Security verification <span className="text-red-600">*</span>
+              </h3>
+              <p className="mb-3 mt-1 text-xs text-limac-muted">
+                Complete the captcha check before submitting the warranty request.
+              </p>
+              {captchaSiteKey ? (
+                <TurnstileWidget onToken={handleTurnstileToken} onError={handleTurnstileError} />
+              ) : (
+                <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700">
+                  Captcha is not configured. Add NEXT_PUBLIC_TURNSTILE_SITE_KEY in the frontend
+                  environment and restart the frontend server.
+                </p>
+              )}
+              {captchaError ? <p className="mt-2 text-xs text-red-600">{captchaError}</p> : null}
+            </div>
           </div>
         </div>
       )}
@@ -319,6 +360,7 @@ function Input({
   className,
   required = false,
   hint,
+  max,
 }: {
   label: string
   value: string
@@ -328,6 +370,7 @@ function Input({
   className?: string
   required?: boolean
   hint?: string
+  max?: string
 }) {
   return (
     <label className={className}>
@@ -338,6 +381,7 @@ function Input({
       <input
         type={type}
         required={required}
+        max={max}
         value={value}
         onBlur={onBlur}
         onChange={(event) => onChange(event.target.value)}

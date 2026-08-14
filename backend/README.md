@@ -90,6 +90,7 @@ MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/<database>
 MONGODB_DATABASE=limac
 JWT_SECRET_KEY=<generated-secret>
 TURNSTILE_SECRET_KEY=<cloudflare-turnstile-secret>
+TURNSTILE_REQUIRED=true
 CLOUDINARY_CLOUD_NAME=<cloud-name>
 CLOUDINARY_API_KEY=<api-key>
 CLOUDINARY_API_SECRET=<api-secret>
@@ -109,3 +110,10 @@ limac/warranty-bills/2026/08
 ```
 
 No SMS, OTP, Resend, SMTP, WhatsApp or outbound notification provider is required for V1.
+
+For local development without Cloudflare Turnstile keys, set:
+
+```env
+TURNSTILE_REQUIRED=false
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+```
