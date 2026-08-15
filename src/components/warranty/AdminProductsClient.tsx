@@ -2,12 +2,13 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Loader2, LogOut, Plus, RefreshCw, Search } from 'lucide-react'
-import { listWarrantyProducts, upsertWarrantyProduct } from '@/services/warrantyApi'
+import { ChevronLeft, Loader2, LogOut, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { deleteWarrantyProduct, listWarrantyProducts, upsertWarrantyProduct } from '@/services/warrantyApi'
 import type { AdminProduct } from '@/types/warranty'
 import {
   clearAdminSession,
   getAdminAccessToken,
+  isSuperAdmin,
   isAdminSessionExpired,
   touchAdminSession,
 } from '@/components/warranty/adminSession'
@@ -25,8 +26,12 @@ export default function AdminProductsClient() {
   const [form, setForm] = useState(emptyForm)
   const [search, setSearch] = useState('')
   const [authorized, setAuthorized] = useState(false)
+  const [canDelete, setCanDelete] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteAction, setDeleteAction] = useState<AdminProduct | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -47,6 +52,7 @@ export default function AdminProductsClient() {
     setError(null)
     try {
       setProducts(await listWarrantyProducts(token, nextSearch))
+      setCanDelete(isSuperAdmin())
       setAuthorized(true)
     } catch (err) {
       const nextError = err instanceof Error ? err.message : 'Unable to load products.'
@@ -102,6 +108,37 @@ export default function AdminProductsClient() {
   function submitSearch(event: FormEvent) {
     event.preventDefault()
     load(search)
+  }
+
+  function openDelete(product: AdminProduct) {
+    setDeleteAction(product)
+    setDeleteConfirmation('')
+    setError(null)
+    setMessage(null)
+  }
+
+  async function confirmDelete() {
+    if (!deleteAction) return
+    const token = getAdminAccessToken()
+    if (!token || isAdminSessionExpired()) return logout()
+    if (deleteConfirmation !== deleteAction.serial_number) {
+      setError('Type the exact serial number to confirm deletion.')
+      return
+    }
+    setDeletingId(deleteAction.id)
+    setError(null)
+    setMessage(null)
+    try {
+      await deleteWarrantyProduct(token, deleteAction.id)
+      setMessage(`Deleted product serial ${deleteAction.serial_number}.`)
+      setDeleteAction(null)
+      setDeleteConfirmation('')
+      await load(search)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete product serial.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   if (!authorized) {
@@ -221,12 +258,13 @@ export default function AdminProductsClient() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Updated</th>
+                {canDelete ? <th className="px-4 py-3">Actions</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800 text-white">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-limac-muted" colSpan={6}>Loading products...</td>
+                  <td className="px-4 py-6 text-limac-muted" colSpan={canDelete ? 7 : 6}>Loading products...</td>
                 </tr>
               ) : products.length ? (
                 products.map((product) => (
@@ -240,17 +278,69 @@ export default function AdminProductsClient() {
                     <td className="px-4 py-3">{product.status}</td>
                     <td className="px-4 py-3 text-limac-muted">{product.source_system || '-'}</td>
                     <td className="px-4 py-3 text-limac-muted">{formatDateTime(product.updated_at)}</td>
+                    {canDelete ? (
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          disabled={deletingId === product.id}
+                          onClick={() => openDelete(product)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300"
+                        >
+                          {deletingId === product.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          Delete
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td className="px-4 py-6 text-limac-muted" colSpan={6}>No products found.</td>
+                  <td className="px-4 py-6 text-limac-muted" colSpan={canDelete ? 7 : 6}>No products found.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {deleteAction ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-red-500/40 bg-gray-900 p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-white">Delete product serial</h2>
+            <p className="mt-3 text-sm text-limac-muted">
+              This removes <span className="font-semibold text-white">{deleteAction.serial_number}</span> from the Limac database.
+              Approval checks will no longer match this serial.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-white">
+                Type {deleteAction.serial_number} to confirm
+              </span>
+              <input
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-red-400"
+              />
+            </label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteAction(null)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingId === deleteAction.id || deleteConfirmation !== deleteAction.serial_number}
+                onClick={confirmDelete}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

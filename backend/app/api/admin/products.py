@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,6 +14,7 @@ from app.utils.serials import normalize_serial
 router = APIRouter(prefix="/products", tags=["admin-products"])
 
 require_product_manager = require_role(AdminRole.APPROVER, AdminRole.SUPER_ADMIN)
+require_product_admin = require_role(AdminRole.SUPER_ADMIN)
 
 
 class AdminProductCreateRequest(BaseModel):
@@ -70,6 +71,18 @@ async def upsert_admin_product(
         sold_at=payload.sold_at,
     )
     return _product_response(product)
+
+
+@router.delete("/{product_id}")
+async def delete_admin_product(
+    product_id: str,
+    db: AsyncIOMotorDatabase = Depends(db_dependency),
+    _: dict[str, Any] = Depends(require_product_admin),
+) -> dict[str, str]:
+    deleted = await ProductRepository(db).delete_by_id(product_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product serial not found.")
+    return {"id": product_id, "status": "deleted"}
 
 
 def _product_response(product: dict[str, Any]) -> AdminProductResponse:

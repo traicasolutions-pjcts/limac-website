@@ -222,6 +222,15 @@ export function upsertWarrantyProduct(token: string, payload: AdminProductCreate
   })
 }
 
+export function deleteWarrantyProduct(token: string, productId: string) {
+  return requestJson<{ id: string; status: string }>(`/admin/products/${productId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
 export function listWarrantyAdminUsers(token: string) {
   return requestJson<AdminUser[]>('/admin/users', {
     headers: {

@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
@@ -149,6 +150,12 @@ class ProductRepository:
             {"$set": {"status": ProductStatus.REGISTERED, "updated_at": utc_now()}},
             return_document=ReturnDocument.AFTER,
         )
+
+    async def delete_by_id(self, product_id: str) -> bool:
+        if not ObjectId.is_valid(product_id):
+            return False
+        result = await self.collection.delete_one({"_id": ObjectId(product_id)})
+        return result.deleted_count == 1
 
     def _serialize_product(self, product: dict[str, Any]) -> dict[str, Any]:
         serialized = dict(product)
