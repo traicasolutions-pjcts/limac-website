@@ -48,6 +48,7 @@ export const NAV_LINKS = [
   { label: 'Home', href: '/' },
   { label: 'About Us', href: '/about' },
   { label: 'Products', href: '/products' },
+  { label: 'Warranty', href: '/warranty/register' },
   { label: 'Careers', href: '/careers' },
   { label: 'Contact', href: '/contact' },
 ] as const

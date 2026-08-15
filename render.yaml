@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: limac-warranty-api
+    runtime: docker
+    plan: starter
+    rootDir: backend
+
+    healthCheckPath: /health/live
+
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      - key: MONGODB_URI
+        sync: false
+
+      - key: MONGODB_DATABASE
+        value: limac
+
+      - key: JWT_SECRET_KEY
+        sync: false
+
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: CLOUDINARY_BILL_FOLDER_ROOT
+        value: limac/warranty-bills

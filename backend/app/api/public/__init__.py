@@ -1,0 +1,1 @@
+"""Public warranty endpoints."""
