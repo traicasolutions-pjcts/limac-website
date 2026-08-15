@@ -23,7 +23,7 @@ The public warranty pages are part of the Next.js website, but all warranty busi
 | --- | --- | --- | --- |
 | Public website | Next.js, React, TypeScript, Tailwind | Vercel | Marketing pages, product pages, blog, warranty UI |
 | Warranty frontend | Next.js client components | Vercel/browser | Registration form, status lookup, admin UI |
-| Warranty API | FastAPI, Pydantic, Motor | Render Docker service | Registration, admin auth, review actions, serial import, CSV export |
+| Warranty API | FastAPI, Pydantic, Motor | Render Docker service | Registration, admin auth, product serial database, review actions, serial import, CSV export |
 | Database | MongoDB | Atlas or local Docker | Warranty records, products, admin users, audit/backup data |
 | Bill storage | Cloudinary authenticated assets | Cloudinary | Secure warranty bill storage and signed access URLs |
 | Captcha | Cloudflare Turnstile | Cloudflare | Public registration bot protection |
@@ -65,6 +65,7 @@ flowchart TB
 | `src/app/admin/warranty/login/page.tsx` | Admin login route |
 | `src/app/admin/warranty/registrations/page.tsx` | Admin registration queue |
 | `src/app/admin/warranty/registrations/[id]/page.tsx` | Admin registration detail |
+| `src/app/admin/warranty/products/page.tsx` | Product serial database management |
 | `src/app/admin/warranty/users/page.tsx` | Super admin user management |
 | `src/components/warranty/` | Warranty frontend components |
 | `src/services/warrantyApi.ts` | Browser API client for FastAPI |
@@ -103,7 +104,11 @@ Available in current version:
   - Dealer code
 - Customer must accept warranty terms and privacy policy.
 - Cloudflare Turnstile token is required when `TURNSTILE_REQUIRED=true`.
-- Backend performs advisory serial validation.
+- Backend checks the product serial against the Limac product database for duplicate/open-request protection.
+- If the serial is missing from the product database, registration is allowed and held for manual review.
+- If the serial exists with `AVAILABLE`, registration is allowed and the product is moved to `REGISTRATION_PENDING`.
+- If the serial exists with `REGISTRATION_PENDING`, registration is blocked because a request is already open.
+- If the serial exists with `REGISTERED`, registration is blocked because warranty is already assigned.
 - Backend creates a pending registration with a generated reference number.
 - Customer uploads bill/invoice document after registration.
 - Supported bill file types:
@@ -173,7 +178,11 @@ Available in current version:
 - Queue supports searching by customer name, mobile number, registration number, and serial.
 - Admins can open detail views.
 - Admins can view uploaded bills through short-lived signed Cloudinary URLs.
+- Admin registration detail performs a fresh current lookup against the Limac product database, rather than relying only on the original registration snapshot.
 - Admins can update registration status.
+- Approval requires the serial to exist in the Limac product database and not already be `REGISTERED` for a different warranty.
+- Approval changes the product status to `REGISTERED`.
+- Rejection, cancellation, or deletion releases a matching `REGISTRATION_PENDING` product back to `AVAILABLE`.
 - Reason is required for:
   - `REJECTED`
   - `MORE_INFORMATION_REQUIRED`
@@ -220,11 +229,29 @@ Planned future version:
 
 Available in current version:
 
+- Product serials are stored in the MongoDB `products` collection, which acts as the Limac product database.
+- Manager/approver and super admin users can manually add or update product serials from `/admin/warranty/products`.
+- Manual product entry captures:
+  - Serial number
+  - Product model
+  - Sold date
+- Sold date cannot be greater than the current date.
+- New manual product entries default to `AVAILABLE`.
+- Super admins can delete product serials from the product database.
 - Super admins can upload CSV/XLSX serial import files.
 - Import supports dry-run mode.
 - Import service validates required headers.
 - Product records are inserted or updated in MongoDB.
+- CSV/XLSX imported products also default to `AVAILABLE`.
 - Import checksum is calculated for traceability.
+
+Current product statuses:
+
+- `AVAILABLE`: serial can be used for a new warranty registration.
+- `REGISTRATION_PENDING`: a warranty registration request is already open for this serial.
+- `REGISTERED`: warranty is already assigned; future registration/approval is blocked.
+- `BLOCKED`: serial is administratively blocked.
+- `REPLACED`: serial has been replaced.
 
 Planned future version:
 
@@ -267,8 +294,13 @@ sequenceDiagram
   N->>A: POST /api/v1/public/warranty-registrations
   A->>T: Verify token through siteverify
   T-->>A: Verification result
-  A->>M: Check product serial advisory state
-  A->>M: Insert warranty_registrations document
+  A->>M: Check product serial status
+  alt Product missing or AVAILABLE
+    A->>M: Insert warranty_registrations document
+    A->>M: Move matching product to REGISTRATION_PENDING when present
+  else Product REGISTRATION_PENDING or REGISTERED
+    A-->>N: 422 duplicate/open request error
+  end
   M-->>A: Registration number
   A-->>N: 202 Accepted + registration_number
   C->>N: Upload bill
@@ -301,6 +333,15 @@ sequenceDiagram
   UI->>API: GET /api/v1/admin/registrations/{id}/bill-access
   API->>CL: Build signed authenticated URL
   API-->>UI: Signed URL valid for about 5 minutes
+  Admin->>UI: Approve registration
+  UI->>API: POST /api/v1/admin/registrations/{id}/status APPROVED
+  API->>DB: Check product status
+  alt Product AVAILABLE or matching REGISTRATION_PENDING
+    API->>DB: Update registration and mark product REGISTERED
+    API-->>UI: Approved
+  else Product missing or already REGISTERED
+    API-->>UI: 422 approval error
+  end
 ```
 
 ## 7. Database Design
@@ -313,12 +354,17 @@ MongoDB is initialized on backend startup. Index creation is idempotent and hand
 erDiagram
   PRODUCTS {
     ObjectId _id
+    string serial_number
     string serial_normalized
     string product_model
     string product_category
     string status
+    datetime sold_at
+    string pending_registration_number
     string source_system
     string source_record_id
+    datetime source_updated_at
+    int sync_version
     datetime created_at
     datetime updated_at
   }
@@ -401,9 +447,9 @@ erDiagram
     datetime expires_at
   }
 
-  PRODUCTS ||--o{ WARRANTY_REGISTRATIONS : "serial advisory"
+  PRODUCTS ||--o{ WARRANTY_REGISTRATIONS : "serial status gate"
   WARRANTY_REGISTRATIONS ||--o{ WARRANTY_REGISTRATION_BACKUPS : "snapshotted as"
-  WARRANTY_REGISTRATIONS ||--o| WARRANTIES : "future approval creates"
+  WARRANTY_REGISTRATIONS ||--o| WARRANTIES : "future certificate/record"
   ADMIN_USERS ||--o{ WARRANTY_REGISTRATIONS : "reviews"
   ADMIN_USERS ||--o{ WARRANTY_REGISTRATION_BACKUPS : "deletes"
 ```
@@ -412,7 +458,7 @@ erDiagram
 
 | Collection | Important Indexes | Purpose |
 | --- | --- | --- |
-| `products` | Unique `serial_normalized`; `status, updated_at`; `source_system, source_record_id` | Product master serial validation and imports |
+| `products` | Unique `serial_normalized`; `status, updated_at`; `source_system, source_record_id` | Limac product database for manual entry, imports, duplicate request blocking, and approval checks |
 | `warranty_registrations` | Unique `registration_number`; `status, submitted_at`; `serial_normalized, submitted_at`; `purchase.invoice_number`; `anti_abuse.idempotency_hash` | Live registration queue |
 | `warranty_registration_backups` | `registration_number, created_at`; `action, created_at`; `created_at` | Snapshot history and deleted export recovery |
 | `warranties` | Unique `warranty_number`; unique `serial_normalized`; `status, created_at` | Future approved warranty records |
@@ -421,6 +467,23 @@ erDiagram
 | `serial_import_jobs` | `checksum_sha256`; `created_at` | Serial import tracking |
 | `sync_runs` | Unique `batch_id`; `source_system, created_at` | Future ERP/Tally sync runs |
 | `submission_rate_limits` | Unique `key, window`; TTL `expires_at` | Future abuse controls |
+
+### Product Database Fields
+
+The `products` collection is the Limac product serial database used by manual entry, CSV/XLSX import, future Tally sync, public registration duplicate checks, and admin approval checks.
+
+| Field | Purpose |
+| --- | --- |
+| `serial_number` | Original serial value entered/imported |
+| `serial_normalized` | Uppercase, whitespace-free serial used for matching |
+| `product_model` | Product model used by admin review and future integrations |
+| `sold_at` | Sold date to dealer/user; cannot be greater than current date for manual entry |
+| `status` | Product lifecycle state: `AVAILABLE`, `REGISTRATION_PENDING`, `REGISTERED`, `BLOCKED`, `REPLACED` |
+| `pending_registration_number` | Registration reference currently holding this serial while status is `REGISTRATION_PENDING` |
+| `source_system` | `MANUAL_ADMIN`, `INITIAL_EXPORT`, or future integration source such as Tally |
+| `source_record_id` | Source-side stable identifier when available |
+| `source_updated_at` | Timestamp from source system when available |
+| `sync_version` | Incremented when imported/synced data changes |
 
 ### Backup and Deleted Export Design
 
@@ -434,6 +497,27 @@ Current delete behavior:
 6. CSV export reads live rows plus deleted backup snapshots.
 7. Deleted CSV rows are exported with `status=DELETED`.
 
+### Product Status Lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> AVAILABLE: manual add/import
+  AVAILABLE --> REGISTRATION_PENDING: customer registration accepted
+  REGISTRATION_PENDING --> REGISTERED: admin approval
+  REGISTRATION_PENDING --> AVAILABLE: rejection/cancellation/deletion
+  AVAILABLE --> BLOCKED: admin/future integration
+  AVAILABLE --> REPLACED: admin/future integration
+  REGISTERED --> [*]
+```
+
+Rules:
+
+- Missing product records do not block customer registration.
+- Existing `AVAILABLE` records allow registration and are reserved as `REGISTRATION_PENDING`.
+- Existing `REGISTRATION_PENDING` records block new registration for the same normalized serial.
+- Existing `REGISTERED` records block new registration and approval for the same normalized serial.
+- Serial matching is case-insensitive and ignores whitespace because serials are stored and queried with `serial_normalized`.
+
 ## 8. API Design
 
 ### Public API
@@ -442,7 +526,7 @@ Base prefix: `/api/v1/public`
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/products/{serial}/validation` | Advisory product serial validation |
+| `GET` | `/products/{serial}/validation` | Product serial status lookup |
 | `POST` | `/warranty-registrations` | Create pending warranty registration |
 | `POST` | `/warranty-registrations/status-lookup` | Customer status lookup |
 | `POST` | `/warranty-registrations/{reference}/documents` | Upload bill/invoice |
@@ -461,6 +545,9 @@ Base prefix: `/api/v1/admin`
 | `POST` | `/registrations/{id}/status` | Admin | Update status |
 | `DELETE` | `/registrations/{id}` | Super admin | Delete registration with backup |
 | `GET` | `/registrations/{id}/bill-access` | Admin | Get signed bill URL |
+| `GET` | `/products` | Approver or super admin | List/search product serials |
+| `POST` | `/products` | Approver or super admin | Add or update product serial |
+| `DELETE` | `/products/{id}` | Super admin | Delete product serial |
 | `POST` | `/serial-imports` | Super admin | Upload serial import |
 | `GET` | `/users` | Super admin | List admin users |
 | `POST` | `/users` | Super admin | Create admin user |
@@ -730,6 +817,11 @@ Available now:
 - Admin login.
 - Admin registration queue and detail views.
 - Admin status update.
+- Product serial database page for manual entry and search.
+- Product serial duplicate/open-request validation during public registration.
+- Approval check that prevents reusing already assigned serials.
+- Product status transitions between `AVAILABLE`, `REGISTRATION_PENDING`, and `REGISTERED`.
+- Super-admin-only product serial deletion.
 - Super admin delete with backup snapshot.
 - CSV export including deleted backups as `DELETED`.
 - Super admin user creation and password reset.
@@ -739,7 +831,7 @@ Available now:
 
 Known current limitations:
 
-- Final warranty approval creation is not fully implemented.
+- Final warranty record/certificate creation is not fully implemented; current approval updates registration and product status.
 - `warranties` and `audit_logs` collections are indexed but not fully used by current approval workflow.
 - Admin refresh token flow is incomplete from the frontend perspective.
 - Serial import job lookup endpoint is not persisted yet.
@@ -794,4 +886,3 @@ Current verified state after recent changes:
 
 - Backend tests passed: `10 passed`
 - Frontend build passed: `npm run build`
-
