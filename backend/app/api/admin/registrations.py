@@ -112,12 +112,14 @@ async def update_registration_status(
     } and not payload.reason:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required.")
     repository = RegistrationRepository(db)
+    product_repository = ProductRepository(db)
+    registration = None
     if payload.status == RegistrationStatus.APPROVED:
         registration = await repository.get_by_id(registration_id)
         if not registration:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
         serial_number = (registration.get("product") or {}).get("serial_number")
-        product = await ProductRepository(db).get_by_serial(str(serial_number or ""))
+        product = await product_repository.get_by_serial(str(serial_number or ""))
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -125,6 +127,26 @@ async def update_registration_status(
                     "Serial number is not recorded in Limac database. "
                     "Cross check the serial number in Limac database and add it to proceed."
                 ),
+            )
+        if product.get("status") == ProductStatus.REGISTERED:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Warranty is already assigned for this serial number.",
+            )
+        if product.get("status") in {ProductStatus.BLOCKED, ProductStatus.REPLACED}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="This serial number is not eligible for warranty approval.",
+            )
+        pending_registration_number = product.get("pending_registration_number")
+        if (
+            product.get("status") == ProductStatus.REGISTRATION_PENDING
+            and pending_registration_number
+            and pending_registration_number != registration.get("registration_number")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="A warranty registration request is already open for this serial number.",
             )
     updated = await repository.update_status(
         registration_id=registration_id,
@@ -134,6 +156,19 @@ async def update_registration_status(
     )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+    serial_number = (updated.get("product") or {}).get("serial_number")
+    if payload.status == RegistrationStatus.APPROVED and serial_number:
+        registered = await product_repository.mark_registered(str(serial_number))
+        if not registered:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unable to assign warranty because this serial number is not eligible.",
+            )
+    if payload.status in {RegistrationStatus.REJECTED, RegistrationStatus.CANCELLED} and serial_number:
+        await product_repository.release_pending_registration(
+            str(serial_number),
+            updated.get("registration_number"),
+        )
     return {"id": registration_id, "status": updated["status"]}
 
 
@@ -143,9 +178,18 @@ async def delete_registration(
     db: AsyncIOMotorDatabase = Depends(db_dependency),
     admin: dict[str, Any] = Depends(require_super_admin),
 ) -> dict[str, str]:
-    deleted = await RegistrationRepository(db).delete_by_id(registration_id, admin_id=str(admin["_id"]))
+    repository = RegistrationRepository(db)
+    document = await repository.get_by_id(registration_id)
+    deleted = await repository.delete_by_id(registration_id, admin_id=str(admin["_id"]))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+    if document:
+        serial_number = (document.get("product") or {}).get("serial_number")
+        if serial_number:
+            await ProductRepository(db).release_pending_registration(
+                str(serial_number),
+                document.get("registration_number"),
+            )
     return {"id": registration_id, "status": "deleted"}
 
 

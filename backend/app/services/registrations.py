@@ -3,6 +3,8 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.models.enums import RegistrationStatus
+from app.models.enums import ProductStatus
+from app.repositories.products import ProductRepository
 from app.repositories.registrations import RegistrationRepository
 from app.schemas.registrations import (
     StatusLookupRequest,
@@ -14,6 +16,10 @@ from app.utils.masking import mask_mobile, mask_serial, normalize_mobile
 from app.utils.serials import normalize_serial
 
 
+class RegistrationSerialError(RuntimeError):
+    pass
+
+
 async def create_warranty_registration(
     db: AsyncIOMotorDatabase,
     payload: WarrantyRegistrationCreate,
@@ -21,17 +27,42 @@ async def create_warranty_registration(
     idempotency_key: str | None,
 ) -> WarrantyRegistrationCreated:
     repository = RegistrationRepository(db)
-    document = await repository.create_pending(
-        payload,
-        idempotency_key=idempotency_key,
-        serial_validation_snapshot={
-            "result": None,
-            "checked_at": None,
-            "serial_normalized": normalize_serial(payload.serial_number),
-            "matched_product_id": None,
-            "existing_warranty_id": None,
-        },
-    )
+    product_repository = ProductRepository(db)
+    existing_product = await product_repository.get_by_serial(payload.serial_number)
+    reserved_product = None
+    if existing_product:
+        product_status = existing_product.get("status")
+        if product_status == ProductStatus.REGISTERED:
+            raise RegistrationSerialError("Warranty is already assigned for this serial number.")
+        if product_status == ProductStatus.REGISTRATION_PENDING:
+            raise RegistrationSerialError("A warranty registration request is already open for this serial number.")
+        if product_status != ProductStatus.AVAILABLE:
+            raise RegistrationSerialError("This serial number is not eligible for warranty registration.")
+        reserved_product = await product_repository.reserve_for_registration(payload.serial_number)
+        if not reserved_product:
+            raise RegistrationSerialError("A warranty registration request is already open for this serial number.")
+
+    try:
+        document = await repository.create_pending(
+            payload,
+            idempotency_key=idempotency_key,
+            serial_validation_snapshot={
+                "result": None,
+                "checked_at": None,
+                "serial_normalized": normalize_serial(payload.serial_number),
+                "matched_product_id": str(reserved_product.get("_id")) if reserved_product else None,
+                "existing_warranty_id": None,
+            },
+        )
+    except Exception:
+        if reserved_product:
+            await product_repository.release_pending_registration(payload.serial_number)
+        raise
+    if reserved_product:
+        await product_repository.attach_pending_registration(
+            payload.serial_number,
+            document["registration_number"],
+        )
     return WarrantyRegistrationCreated(
         registration_number=document["registration_number"],
         status=RegistrationStatus(document["status"]),

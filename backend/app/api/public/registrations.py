@@ -12,7 +12,11 @@ from app.schemas.registrations import (
     WarrantyRegistrationCreated,
 )
 from app.services.captcha import CaptchaVerificationError, verify_turnstile_token
-from app.services.registrations import create_warranty_registration, lookup_registration_status
+from app.services.registrations import (
+    RegistrationSerialError,
+    create_warranty_registration,
+    lookup_registration_status,
+)
 from app.storage.cloudinary_storage import (
     StorageConfigurationError,
     StorageUploadError,
@@ -44,11 +48,14 @@ async def create_registration(
         )
     except CaptchaVerificationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return await create_warranty_registration(
-        db,
-        payload,
-        idempotency_key=idempotency_key,
-    )
+    try:
+        return await create_warranty_registration(
+            db,
+            payload,
+            idempotency_key=idempotency_key,
+        )
+    except RegistrationSerialError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.post("/status-lookup", response_model=StatusLookupResponse)

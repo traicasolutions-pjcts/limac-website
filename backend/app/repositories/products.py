@@ -12,6 +12,7 @@ from app.utils.time import utc_now
 
 PROTECTED_PRODUCT_STATUSES = {
     ProductStatus.REGISTERED,
+    ProductStatus.REGISTRATION_PENDING,
     ProductStatus.BLOCKED,
     ProductStatus.REPLACED,
 }
@@ -104,6 +105,58 @@ class ProductRepository:
         )
         return self._serialize_product(product)
 
+    async def reserve_for_registration(self, serial_number: str) -> dict[str, Any] | None:
+        return await self.collection.find_one_and_update(
+            {
+                "serial_normalized": normalize_serial(serial_number),
+                "status": ProductStatus.AVAILABLE,
+            },
+            {
+                "$set": {
+                    "status": ProductStatus.REGISTRATION_PENDING,
+                    "pending_registration_number": None,
+                    "updated_at": utc_now(),
+                },
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+
+    async def attach_pending_registration(self, serial_number: str, registration_number: str) -> None:
+        await self.collection.update_one(
+            {
+                "serial_normalized": normalize_serial(serial_number),
+                "status": ProductStatus.REGISTRATION_PENDING,
+            },
+            {
+                "$set": {
+                    "pending_registration_number": registration_number,
+                    "updated_at": utc_now(),
+                },
+            },
+        )
+
+    async def release_pending_registration(self, serial_number: str, registration_number: str | None = None) -> None:
+        query: dict[str, Any] = {
+            "serial_normalized": normalize_serial(serial_number),
+            "status": ProductStatus.REGISTRATION_PENDING,
+        }
+        if registration_number:
+            query["$or"] = [
+                {"pending_registration_number": registration_number},
+                {"pending_registration_number": None},
+                {"pending_registration_number": {"$exists": False}},
+            ]
+        await self.collection.update_one(
+            query,
+            {
+                "$set": {
+                    "status": ProductStatus.AVAILABLE,
+                    "updated_at": utc_now(),
+                },
+                "$unset": {"pending_registration_number": ""},
+            },
+        )
+
     async def upsert_from_import(self, product: ProductMasterIn, dry_run: bool) -> tuple[str, str | None]:
         doc = product_input_to_document(product)
         existing = await self.collection.find_one({"serial_normalized": doc["serial_normalized"]})
@@ -145,9 +198,12 @@ class ProductRepository:
         return await self.collection.find_one_and_update(
             {
                 "serial_normalized": normalize_serial(serial_number),
-                "status": {"$nin": list(PROTECTED_PRODUCT_STATUSES - {ProductStatus.REGISTERED})},
+                "status": {"$nin": [ProductStatus.BLOCKED, ProductStatus.REPLACED]},
             },
-            {"$set": {"status": ProductStatus.REGISTERED, "updated_at": utc_now()}},
+            {
+                "$set": {"status": ProductStatus.REGISTERED, "updated_at": utc_now()},
+                "$unset": {"pending_registration_number": ""},
+            },
             return_document=ReturnDocument.AFTER,
         )
 
