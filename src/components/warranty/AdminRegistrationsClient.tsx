@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Download, Eye, LogOut, RefreshCw, Search, Trash2, UserPlus, X } from 'lucide-react'
+import { Download, Eye, LogOut, PackagePlus, RefreshCw, Search, Trash2, UserPlus, X } from 'lucide-react'
 import {
   deleteWarrantyRegistration,
   downloadWarrantyRegistrationsCsv,
@@ -27,6 +27,9 @@ const filters: Array<{ label: string; value?: RegistrationStatus }> = [
   { label: 'Approved', value: 'APPROVED' },
   { label: 'Rejected', value: 'REJECTED' },
 ]
+
+const headerButtonClass =
+  'inline-flex items-center gap-2 rounded-lg border border-limac-blue/40 bg-limac-blue/10 px-3 py-2 text-sm font-semibold text-limac-blue hover:border-limac-blue hover:bg-limac-blue/15 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-100 dark:hover:border-sky-300/60 dark:hover:bg-sky-400/15'
 
 export default function AdminRegistrationsClient() {
   const [rows, setRows] = useState<AdminRegistrationRow[]>([])
@@ -151,6 +154,7 @@ export default function AdminRegistrationsClient() {
       setStatusReason('')
       await load()
     } catch (err) {
+      setStatusAction(null)
       setError(err instanceof Error ? err.message : 'Unable to update status.')
     } finally {
       setUpdatingId(null)
@@ -251,7 +255,7 @@ export default function AdminRegistrationsClient() {
             <>
               <Link
                 href="/admin/warranty/users"
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+                className={headerButtonClass}
               >
                 <UserPlus size={16} />
                 Users
@@ -259,17 +263,24 @@ export default function AdminRegistrationsClient() {
               <button
                 type="button"
                 onClick={exportCsv}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+                className={headerButtonClass}
               >
                 <Download size={16} />
                 Export All CSV
               </button>
             </>
           ) : null}
+          <Link
+            href="/admin/warranty/products"
+            className={headerButtonClass}
+          >
+            <PackagePlus size={16} />
+            Products
+          </Link>
           <button
             type="button"
             onClick={() => load()}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+            className={headerButtonClass}
           >
             <RefreshCw size={16} />
             Refresh
@@ -277,7 +288,7 @@ export default function AdminRegistrationsClient() {
           <button
             type="button"
             onClick={logout}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-400/50 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-800 hover:border-slate-500 hover:bg-slate-200 dark:border-gray-700 dark:bg-gray-950 dark:text-white dark:hover:border-gray-500"
           >
             <LogOut size={16} />
             Logout
@@ -285,16 +296,16 @@ export default function AdminRegistrationsClient() {
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 flex flex-wrap gap-2 rounded-lg border border-gray-800 bg-gray-900 p-2">
         {filters.map((filter) => (
           <button
             key={filter.label}
             type="button"
             onClick={() => selectFilter(filter.value)}
-            className={`rounded-lg border px-3 py-2 text-sm font-semibold ${
+            className={`rounded-md px-3 py-2 text-sm font-semibold ${
               status === filter.value
-                ? 'border-limac-green bg-limac-green text-limac-black'
-                : 'border-gray-700 bg-gray-900 text-white'
+                ? 'bg-limac-green text-limac-black'
+                : 'text-limac-muted hover:bg-white/5 hover:text-white'
             }`}
           >
             {filter.label}

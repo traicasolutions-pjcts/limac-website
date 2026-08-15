@@ -23,7 +23,7 @@ async def test_advisory_validation_allows_not_found(monkeypatch) -> None:
     response = await serial_validation.validate_serial_advisory(object(), " lmc1 ")
 
     assert response.result == SerialValidationResult.NOT_FOUND
-    assert "still allowed" in response.advisory_message
+    assert "before approval" in response.advisory_message
 
 
 async def test_advisory_validation_found_registered(monkeypatch) -> None:

@@ -50,6 +50,59 @@ class ProductRepository:
     async def get_by_serial(self, serial_number: str) -> dict[str, Any] | None:
         return await self.collection.find_one({"serial_normalized": normalize_serial(serial_number)})
 
+    async def list_products(self, *, search: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
+        if search and search.strip():
+            import re
+
+            escaped = re.escape(search.strip())
+            query["$or"] = [
+                {"serial_number": {"$regex": escaped, "$options": "i"}},
+                {"serial_normalized": {"$regex": escaped, "$options": "i"}},
+                {"product_model": {"$regex": escaped, "$options": "i"}},
+                {"dealer_code": {"$regex": escaped, "$options": "i"}},
+            ]
+        cursor = self.collection.find(query).sort("updated_at", -1).limit(min(max(limit, 1), 100))
+        return [self._serialize_product(product) async for product in cursor]
+
+    async def upsert_manual(
+        self,
+        *,
+        serial_number: str,
+        product_model: str,
+        sold_at: date | None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        serial_normalized = normalize_serial(serial_number)
+        update = {
+            "$set": {
+                "serial_number": serial_number.strip(),
+                "serial_normalized": serial_normalized,
+                "product_model": product_model.strip(),
+                "sold_at": _serialize_date(sold_at),
+                "source_system": "MANUAL_ADMIN",
+                "source_updated_at": now,
+                "updated_at": now,
+            },
+            "$setOnInsert": {
+                "product_category": "MANUAL",
+                "warranty_months": 60,
+                "manufactured_at": None,
+                "dealer_code": None,
+                "status": ProductStatus.AVAILABLE,
+                "source_record_id": f"manual:{serial_normalized}",
+                "sync_version": 1,
+                "created_at": now,
+            },
+        }
+        product = await self.collection.find_one_and_update(
+            {"serial_normalized": serial_normalized},
+            update,
+            upsert=True,
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._serialize_product(product)
+
     async def upsert_from_import(self, product: ProductMasterIn, dry_run: bool) -> tuple[str, str | None]:
         doc = product_input_to_document(product)
         existing = await self.collection.find_one({"serial_normalized": doc["serial_normalized"]})
@@ -96,3 +149,12 @@ class ProductRepository:
             {"$set": {"status": ProductStatus.REGISTERED, "updated_at": utc_now()}},
             return_document=ReturnDocument.AFTER,
         )
+
+    def _serialize_product(self, product: dict[str, Any]) -> dict[str, Any]:
+        serialized = dict(product)
+        serialized["id"] = str(serialized.get("_id"))
+        serialized["_id"] = str(serialized.get("_id"))
+        for field in ("manufactured_at", "sold_at", "source_updated_at", "created_at", "updated_at"):
+            if isinstance(serialized.get(field), (date, datetime)):
+                serialized[field] = serialized[field].isoformat()
+        return serialized

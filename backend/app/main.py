@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.admin.auth import router as admin_auth_router
+from app.api.admin.products import router as admin_products_router
 from app.api.admin.registrations import router as admin_registrations_router
 from app.api.admin.users import router as admin_users_router
 from app.api.public.products import router as public_products_router
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(public_products_router, prefix=f"{settings.api_v1_prefix}/public")
     app.include_router(public_registrations_router, prefix=f"{settings.api_v1_prefix}/public")
     app.include_router(admin_auth_router, prefix=f"{settings.api_v1_prefix}/admin")
+    app.include_router(admin_products_router, prefix=f"{settings.api_v1_prefix}/admin")
     app.include_router(admin_registrations_router, prefix=f"{settings.api_v1_prefix}/admin")
     app.include_router(admin_serial_imports_router, prefix=f"{settings.api_v1_prefix}/admin")
     app.include_router(admin_users_router, prefix=f"{settings.api_v1_prefix}/admin")

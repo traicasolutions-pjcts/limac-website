@@ -91,6 +91,23 @@ export interface AdminUserCreatePayload {
   role: 'APPROVER' | 'SUPER_ADMIN'
 }
 
+export interface AdminProduct {
+  id: string
+  serial_number: string
+  serial_normalized: string
+  product_model: string
+  sold_at?: string | null
+  status: string
+  source_system?: string | null
+  updated_at?: string | null
+}
+
+export interface AdminProductCreatePayload {
+  serial_number: string
+  product_model: string
+  sold_at?: string | null
+}
+
 export interface AdminRegistrationRow {
   id?: string
   _id?: string

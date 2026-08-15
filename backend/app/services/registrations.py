@@ -10,10 +10,8 @@ from app.schemas.registrations import (
     WarrantyRegistrationCreate,
     WarrantyRegistrationCreated,
 )
-from app.services.serial_validation import validate_serial_advisory
 from app.utils.masking import mask_mobile, mask_serial, normalize_mobile
 from app.utils.serials import normalize_serial
-from app.utils.time import utc_now
 
 
 async def create_warranty_registration(
@@ -22,15 +20,14 @@ async def create_warranty_registration(
     *,
     idempotency_key: str | None,
 ) -> WarrantyRegistrationCreated:
-    serial_validation = await validate_serial_advisory(db, payload.serial_number)
     repository = RegistrationRepository(db)
     document = await repository.create_pending(
         payload,
         idempotency_key=idempotency_key,
         serial_validation_snapshot={
-            "result": serial_validation.result,
-            "checked_at": utc_now(),
-            "serial_normalized": serial_validation.serial_normalized,
+            "result": None,
+            "checked_at": None,
+            "serial_normalized": normalize_serial(payload.serial_number),
             "matched_product_id": None,
             "existing_warranty_id": None,
         },

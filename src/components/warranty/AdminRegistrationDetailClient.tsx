@@ -18,6 +18,15 @@ import {
   touchAdminSession,
 } from '@/components/warranty/adminSession'
 
+const statusOptions: RegistrationStatus[] = [
+  'PENDING',
+  'UNDER_REVIEW',
+  'MORE_INFORMATION_REQUIRED',
+  'APPROVED',
+  'REJECTED',
+  'CANCELLED',
+]
+
 export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   const [detail, setDetail] = useState<AdminRegistrationDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -94,6 +103,7 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
       setStatusReason('')
       await load()
     } catch (err) {
+      setStatusAction(null)
       setError(err instanceof Error ? err.message : 'Unable to update status.')
     } finally {
       setUpdating(false)
@@ -206,19 +216,23 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
           <p className="text-xs uppercase text-limac-muted">Current status</p>
           <p className="mt-1 text-lg font-bold text-white">{detail.status}</p>
         </div>
-        <select
-          value={detail.status}
-          disabled={updating}
-          onChange={(event) => changeStatus(event.target.value as RegistrationStatus)}
-          className="rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm font-semibold text-white"
-        >
-          <option value="PENDING">PENDING</option>
-          <option value="UNDER_REVIEW">UNDER_REVIEW</option>
-          <option value="MORE_INFORMATION_REQUIRED">MORE_INFORMATION_REQUIRED</option>
-          <option value="APPROVED">APPROVED</option>
-          <option value="REJECTED">REJECTED</option>
-          <option value="CANCELLED">CANCELLED</option>
-        </select>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          {statusOptions.map((option) => (
+            <button
+              key={option}
+              type="button"
+              disabled={updating || option === detail.status}
+              onClick={() => changeStatus(option)}
+              className={`min-h-10 rounded-md px-3 py-2 text-xs font-semibold ${
+                option === detail.status
+                  ? 'bg-limac-green text-limac-black'
+                  : 'border border-gray-700 text-white hover:border-limac-green'
+              } disabled:cursor-not-allowed disabled:opacity-70`}
+            >
+              {statusLabel(option)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -230,13 +244,17 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
           ['State', detail.customer.state],
           ['PIN', detail.customer.pin_code],
         ]} />
-        <InfoCard title="Product" items={[
-          ['Serial', detail.product.serial_number],
-          ['Normalized serial', detail.product.serial_normalized],
-          ['Customer model', detail.product.product_model_customer || '-'],
-          ['Validation', detail.serial_validation?.result || '-'],
-          ['CSV comparison note', serialNote],
-        ]} />
+        <InfoCard
+          title="Product"
+          items={[
+            ['Serial', detail.product.serial_number],
+            ['Normalized serial', detail.product.serial_normalized],
+            ['Customer model', detail.product.product_model_customer || '-'],
+            ['Validation', detail.serial_validation?.result || '-'],
+          ]}
+          noteLabel="Product master note"
+          note={`${serialNote} Matching ignores uppercase/lowercase differences and spaces.`}
+        />
         <InfoCard title="Purchase" items={[
           ['Purchase date', detail.purchase.purchase_date],
           ['Warranty expiry', warrantyExpiryDate],
@@ -400,7 +418,17 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   )
 }
 
-function InfoCard({ title, items }: { title: string; items: Array<[string, string]> }) {
+function InfoCard({
+  title,
+  items,
+  noteLabel,
+  note,
+}: {
+  title: string
+  items: Array<[string, string]>
+  noteLabel?: string
+  note?: string
+}) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900 p-5">
       <h2 className="font-semibold text-white">{title}</h2>
@@ -412,6 +440,12 @@ function InfoCard({ title, items }: { title: string; items: Array<[string, strin
           </div>
         ))}
       </dl>
+      {note ? (
+        <div className="mt-4 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-sm">
+          <p className="text-xs font-semibold uppercase text-sky-700 dark:text-sky-300">{noteLabel || 'Info'}</p>
+          <p className="mt-1 font-semibold text-sky-950 dark:text-sky-100">{note}</p>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -423,18 +457,29 @@ function addYears(dateString: string, years: number) {
   return date.toISOString().slice(0, 10)
 }
 
+function statusLabel(status: RegistrationStatus) {
+  return {
+    PENDING: 'Pending',
+    UNDER_REVIEW: 'Under review',
+    MORE_INFORMATION_REQUIRED: 'More info',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    CANCELLED: 'Cancelled',
+  }[status]
+}
+
 function serialComparisonNote(result?: string) {
   if (result === 'FOUND_UNREGISTERED') {
-    return 'Serial matched the imported product CSV/master and appears unregistered. Final approval is still manual.'
+    return 'Serial matched the product master table and appears unregistered. Final approval is still manual.'
   }
   if (result === 'FOUND_ALREADY_REGISTERED') {
-    return 'Serial matched the imported product CSV/master but appears already registered. Check carefully before approval.'
+    return 'Serial matched the product master table but appears already registered. Check carefully before approval.'
   }
   if (result === 'NOT_FOUND') {
-    return 'Serial was not found in the imported product CSV/master. Submission is still allowed for manual review.'
+    return 'Serial was not found in Limac database. Add the serial number in Limac database before approving this registration.'
   }
   if (result === 'VALIDATION_NOT_AVAILABLE') {
-    return 'Serial comparison was unavailable during submission. Verify manually before approval.'
+    return 'Serial check was unavailable during registration. Verify the serial number in Limac database before approval.'
   }
-  return 'No serial comparison result was stored for this request.'
+  return 'No product master check was run during customer registration. Verify the serial number in Limac database before approval.'
 }

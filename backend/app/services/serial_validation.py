@@ -24,7 +24,10 @@ async def validate_serial_advisory(
         return SafeSerialValidationResponse(
             result=SerialValidationResult.NOT_FOUND,
             serial_normalized=serial_normalized,
-            advisory_message="Serial was not found in the current product master. Submission is still allowed.",
+            advisory_message=(
+                "Serial was not found in Limac database. "
+                "An admin must add it before approval."
+            ),
         )
 
     if product.get("status") == ProductStatus.REGISTERED:

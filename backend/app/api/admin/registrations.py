@@ -10,7 +10,8 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.config import Settings, get_settings
 from app.database import db_dependency
-from app.models.enums import RegistrationStatus
+from app.models.enums import ProductStatus, RegistrationStatus, SerialValidationResult
+from app.repositories.products import ProductRepository
 from app.repositories.registrations import RegistrationRepository
 from app.security.admin_auth import require_admin, require_super_admin
 from app.storage.cloudinary_storage import StorageConfigurationError, build_cloudinary_bill_access
@@ -76,7 +77,26 @@ async def get_registration(
     document = await RegistrationRepository(db).get_by_id(registration_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
-    return RegistrationRepository(db).serialize_admin_detail(document)
+    detail = RegistrationRepository(db).serialize_admin_detail(document)
+    serial_number = ((document.get("product") or {}).get("serial_number")) or ""
+    product = await ProductRepository(db).get_by_serial(str(serial_number))
+    serial_validation = detail.get("serial_validation") or {}
+    if product:
+        serial_validation["result"] = (
+            SerialValidationResult.FOUND_ALREADY_REGISTERED
+            if product.get("status") == ProductStatus.REGISTERED
+            else SerialValidationResult.FOUND_UNREGISTERED
+        )
+        serial_validation["matched_product_id"] = str(product.get("_id"))
+        serial_validation["product_model"] = product.get("product_model")
+        serial_validation["product_status"] = product.get("status")
+    else:
+        serial_validation["result"] = SerialValidationResult.NOT_FOUND
+        serial_validation["matched_product_id"] = None
+        serial_validation["product_model"] = None
+        serial_validation["product_status"] = None
+    detail["serial_validation"] = serial_validation
+    return detail
 
 
 @router.post("/{registration_id}/status")
@@ -91,7 +111,22 @@ async def update_registration_status(
         RegistrationStatus.MORE_INFORMATION_REQUIRED,
     } and not payload.reason:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required.")
-    updated = await RegistrationRepository(db).update_status(
+    repository = RegistrationRepository(db)
+    if payload.status == RegistrationStatus.APPROVED:
+        registration = await repository.get_by_id(registration_id)
+        if not registration:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+        serial_number = (registration.get("product") or {}).get("serial_number")
+        product = await ProductRepository(db).get_by_serial(str(serial_number or ""))
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Serial number is not recorded in Limac database. "
+                    "Cross check the serial number in Limac database and add it to proceed."
+                ),
+            )
+    updated = await repository.update_status(
         registration_id=registration_id,
         next_status=payload.status,
         admin_id=str(admin["_id"]),

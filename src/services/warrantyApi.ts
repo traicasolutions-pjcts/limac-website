@@ -2,6 +2,8 @@ import type {
   AdminLoginPayload,
   AdminLoginResponse,
   AdminBillAccessResponse,
+  AdminProduct,
+  AdminProductCreatePayload,
   AdminRegistrationDetail,
   AdminRegistrationListResponse,
   AdminUser,
@@ -196,6 +198,27 @@ export function getWarrantyBillAccess(token: string, registrationId: string) {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  })
+}
+
+export function listWarrantyProducts(token: string, search?: string) {
+  const params = new URLSearchParams()
+  if (search?.trim()) params.set('search', search.trim())
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return requestJson<AdminProduct[]>(`/admin/products${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function upsertWarrantyProduct(token: string, payload: AdminProductCreatePayload) {
+  return requestJson<AdminProduct>('/admin/products', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   })
 }
 
