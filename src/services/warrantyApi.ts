@@ -4,6 +4,8 @@ import type {
   AdminBillAccessResponse,
   AdminRegistrationDetail,
   AdminRegistrationListResponse,
+  AdminUser,
+  AdminUserCreatePayload,
   SerialValidationResponse,
   StatusLookupPayload,
   StatusLookupResponse,
@@ -158,11 +160,70 @@ export function updateWarrantyRegistrationStatus(
   })
 }
 
+export function deleteWarrantyRegistration(token: string, registrationId: string) {
+  return requestJson<{ id: string; status: string }>(`/admin/registrations/${registrationId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function downloadWarrantyRegistrationsCsv(token: string, status?: string, search?: string) {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  if (search?.trim()) params.set('search', search.trim())
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const response = await fetch(`${API_BASE}/admin/registrations/export.csv${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error(body?.detail || 'Unable to export registrations.')
+  }
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch?.[1] || `limac-warranty-registrations-${new Date().toISOString().slice(0, 10)}.csv`,
+  }
+}
+
 export function getWarrantyBillAccess(token: string, registrationId: string) {
   return requestJson<AdminBillAccessResponse>(`/admin/registrations/${registrationId}/bill-access`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  })
+}
+
+export function listWarrantyAdminUsers(token: string) {
+  return requestJson<AdminUser[]>('/admin/users', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function createWarrantyAdminUser(token: string, payload: AdminUserCreatePayload) {
+  return requestJson<AdminUser>('/admin/users', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function resetWarrantyAdminUserPassword(token: string, adminUserId: string, password: string) {
+  return requestJson<AdminUser>(`/admin/users/${adminUserId}/password`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ password }),
   })
 }
 

@@ -1,5 +1,6 @@
 from typing import Any
 
+from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
@@ -43,6 +44,29 @@ class AdminUserRepository:
         document["_id"] = result.inserted_id
         return document
 
+    async def list_users(self) -> list[dict[str, Any]]:
+        cursor = self.collection.find({}, {"password_hash": 0, "refresh_tokens": 0}).sort("created_at", -1)
+        return [self._serialize_user(user) async for user in cursor]
+
+    async def reset_password(self, *, admin_id: str, password: str) -> dict[str, Any] | None:
+        if not ObjectId.is_valid(admin_id):
+            return None
+        now = utc_now()
+        user = await self.collection.find_one_and_update(
+            {"_id": ObjectId(admin_id), "disabled_at": None},
+            {
+                "$set": {
+                    "password_hash": hash_password(password),
+                    "updated_at": now,
+                    "password_reset_at": now,
+                    "refresh_tokens": [],
+                },
+            },
+            projection={"password_hash": 0, "refresh_tokens": 0},
+            return_document=ReturnDocument.AFTER,
+        )
+        return self._serialize_user(user) if user else None
+
     async def record_login(self, admin_id: object, refresh_token_hash: str) -> dict[str, Any] | None:
         now = utc_now()
         return await self.collection.find_one_and_update(
@@ -67,3 +91,12 @@ class AdminUserRepository:
             },
             return_document=ReturnDocument.AFTER,
         )
+
+    def _serialize_user(self, user: dict[str, Any]) -> dict[str, Any]:
+        serialized = dict(user)
+        if isinstance(serialized.get("_id"), ObjectId):
+            serialized["_id"] = str(serialized["_id"])
+        for field in ("created_at", "updated_at", "disabled_at", "last_login_at"):
+            if serialized.get(field):
+                serialized[field] = serialized[field].isoformat()
+        return serialized

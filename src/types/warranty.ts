@@ -74,6 +74,23 @@ export interface AdminLoginResponse {
   role: 'REVIEWER' | 'APPROVER' | 'SUPER_ADMIN'
 }
 
+export type AdminRole = AdminLoginResponse['role']
+
+export interface AdminUser {
+  id: string
+  email: string
+  role: AdminRole
+  disabled_at?: string | null
+  last_login_at?: string | null
+  created_at?: string | null
+}
+
+export interface AdminUserCreatePayload {
+  email: string
+  password: string
+  role: 'APPROVER' | 'SUPER_ADMIN'
+}
+
 export interface AdminRegistrationRow {
   id?: string
   _id?: string

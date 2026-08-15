@@ -80,5 +80,5 @@ export default function TurnstileWidget({
     }
   }, [onError, onToken, siteKey])
 
-  return <div ref={containerRef} />
+  return <div ref={containerRef} className="min-h-[65px] min-w-[300px]" />
 }

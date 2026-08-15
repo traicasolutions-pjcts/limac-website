@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from datetime import date, datetime
 from typing import Any
 
@@ -77,6 +78,7 @@ class RegistrationRepository:
         }
         result = await self.collection.insert_one(document)
         document["_id"] = result.inserted_id
+        await self._write_backup_snapshot(action="CREATED", snapshot=document)
         return document
 
     async def get_status_candidate(self, registration_reference: str) -> dict[str, Any] | None:
@@ -93,11 +95,15 @@ class RegistrationRepository:
         return await self.collection.find_one({"registration_number": reference.strip()})
 
     async def attach_bill(self, reference: str, bill_asset: dict[str, Any]) -> dict[str, Any] | None:
-        return await self.collection.find_one_and_update(
+        safe_bill_asset = self._storage_safe_bill_asset(bill_asset)
+        updated = await self.collection.find_one_and_update(
             {"registration_number": reference.strip()},
-            {"$set": {"bill_asset": bill_asset, "updated_at": utc_now()}},
+            {"$set": {"bill_asset": safe_bill_asset, "updated_at": utc_now()}},
             return_document=ReturnDocument.AFTER,
         )
+        if updated:
+            await self._write_backup_snapshot(action="BILL_ATTACHED", snapshot=updated)
+        return updated
 
     async def update_status(
         self,
@@ -119,7 +125,7 @@ class RegistrationRepository:
             "reason": reason,
             "created_at": now,
         }
-        return await self.collection.find_one_and_update(
+        updated = await self.collection.find_one_and_update(
             query,
             {
                 "$set": {"status": next_status, "updated_at": now, "reviewed_at": now},
@@ -127,6 +133,22 @@ class RegistrationRepository:
             },
             return_document=ReturnDocument.AFTER,
         )
+        if updated:
+            await self._write_backup_snapshot(action="STATUS_UPDATED", snapshot=updated, admin_id=admin_id)
+        return updated
+
+    async def delete_by_id(self, registration_id: str, *, admin_id: str | None = None) -> bool:
+        query: dict[str, Any]
+        if ObjectId.is_valid(registration_id):
+            query = {"_id": ObjectId(registration_id)}
+        else:
+            query = {"registration_number": registration_id.strip()}
+        document = await self.collection.find_one(query)
+        if not document:
+            return False
+        await self._write_backup_snapshot(action="DELETED", snapshot=document, admin_id=admin_id)
+        result = await self.collection.delete_one(query)
+        return result.deleted_count == 1
 
     async def list_for_admin(
         self,
@@ -136,6 +158,38 @@ class RegistrationRepository:
         limit: int = 50,
         skip: int = 0,
     ) -> list[dict[str, Any]]:
+        query = self._admin_query(status=status, search=search)
+        cursor = (
+            self.collection.find(query)
+            .sort("submitted_at", -1)
+            .skip(max(skip, 0))
+            .limit(min(max(limit, 1), 100))
+        )
+        return [self._serialize_admin_row(row) async for row in cursor]
+
+    async def list_export_documents(
+        self,
+        *,
+        status: str | None = None,
+        search: str | None = None,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        if status != "DELETED":
+            query = self._admin_query(status=status, search=search)
+            cursor = self.collection.find(query).sort("submitted_at", -1)
+            rows.extend([self.serialize_admin_detail(row) async for row in cursor])
+
+        if status in {None, "DELETED"}:
+            backup_query = self._deleted_backup_query(search=search)
+            backup_cursor = self.db.warranty_registration_backups.find(backup_query).sort("snapshot.submitted_at", -1)
+            async for backup in backup_cursor:
+                snapshot = self.serialize_admin_detail(backup.get("snapshot") or {})
+                snapshot["status"] = "DELETED"
+                rows.append(snapshot)
+
+        return sorted(rows, key=lambda row: row.get("submitted_at") or "", reverse=True)
+
+    def _admin_query(self, *, status: str | None = None, search: str | None = None) -> dict[str, Any]:
         query: dict[str, Any] = {}
         if status:
             query["status"] = status
@@ -152,13 +206,54 @@ class RegistrationRepository:
             if digits:
                 search_clauses.append({"customer.mobile_normalized": {"$regex": re.escape(digits)}})
             query["$or"] = search_clauses
-        cursor = (
-            self.collection.find(query)
-            .sort("submitted_at", -1)
-            .skip(max(skip, 0))
-            .limit(min(max(limit, 1), 100))
-        )
-        return [self._serialize_admin_row(row) async for row in cursor]
+        return query
+
+    def _deleted_backup_query(self, *, search: str | None = None) -> dict[str, Any]:
+        query: dict[str, Any] = {"action": "DELETED"}
+        if search and search.strip():
+            term = search.strip()
+            escaped = re.escape(term)
+            search_clauses: list[dict[str, Any]] = [
+                {"snapshot.customer.name": {"$regex": escaped, "$options": "i"}},
+                {"snapshot.customer.mobile_number": {"$regex": escaped, "$options": "i"}},
+                {"snapshot.registration_number": {"$regex": escaped, "$options": "i"}},
+                {"snapshot.product.serial_normalized": {"$regex": escaped, "$options": "i"}},
+            ]
+            digits = re.sub(r"\D+", "", term)
+            if digits:
+                search_clauses.append({"snapshot.customer.mobile_normalized": {"$regex": re.escape(digits)}})
+            query["$or"] = search_clauses
+        return query
+
+    async def _write_backup_snapshot(
+        self,
+        *,
+        action: str,
+        snapshot: dict[str, Any],
+        admin_id: str | None = None,
+    ) -> None:
+        backup = {
+            "registration_id": snapshot.get("_id"),
+            "registration_number": snapshot.get("registration_number"),
+            "action": action,
+            "admin_id": admin_id,
+            "snapshot": self._backup_safe_snapshot(snapshot),
+            "created_at": utc_now(),
+        }
+        await self.db.warranty_registration_backups.insert_one(backup)
+
+    def _backup_safe_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        safe_snapshot = deepcopy(snapshot)
+        bill_asset = safe_snapshot.get("bill_asset")
+        if isinstance(bill_asset, dict):
+            safe_snapshot["bill_asset"] = self._storage_safe_bill_asset(bill_asset)
+        return safe_snapshot
+
+    def _storage_safe_bill_asset(self, bill_asset: dict[str, Any]) -> dict[str, Any]:
+        safe_bill_asset = deepcopy(bill_asset)
+        for field in ("data_base64", "content", "bytes_content", "file_bytes", "raw"):
+            safe_bill_asset.pop(field, None)
+        return safe_bill_asset
 
     def serialize_admin_detail(self, row: dict[str, Any]) -> dict[str, Any]:
         serialized = self._serialize_value(row)

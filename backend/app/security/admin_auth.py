@@ -10,6 +10,7 @@ from app.config import Settings, get_settings
 from app.database import db_dependency
 from app.repositories.admin_users import AdminUserRepository
 from app.security.tokens import decode_access_token
+from app.models.enums import AdminRole
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -34,3 +35,18 @@ async def require_admin(
     if not admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin account is disabled.")
     return admin
+
+
+def require_role(*allowed_roles: AdminRole):
+    async def dependency(admin: dict[str, Any] = Depends(require_admin)) -> dict[str, Any]:
+        if str(admin.get("role")) not in {str(role) for role in allowed_roles}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This action requires super admin access.",
+            )
+        return admin
+
+    return dependency
+
+
+require_super_admin = require_role(AdminRole.SUPER_ADMIN)

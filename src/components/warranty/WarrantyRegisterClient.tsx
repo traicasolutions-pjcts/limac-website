@@ -290,7 +290,7 @@ export default function WarrantyRegisterClient() {
               checked={form.privacyPolicyConsent}
               onChange={(checked) => updateField('privacyPolicyConsent', checked)}
             />
-            <div className="rounded-lg border border-gray-700 bg-limac-black p-4">
+            <div className="rounded-lg border border-gray-700 bg-limac-black p-4 sm:max-w-[380px]">
               <h3 className="text-sm font-semibold text-white">
                 Security verification <span className="text-red-600">*</span>
               </h3>
@@ -298,7 +298,9 @@ export default function WarrantyRegisterClient() {
                 Complete the captcha check before submitting the warranty request.
               </p>
               {captchaSiteKey ? (
-                <TurnstileWidget onToken={handleTurnstileToken} onError={handleTurnstileError} />
+                <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                  <TurnstileWidget onToken={handleTurnstileToken} onError={handleTurnstileError} />
+                </div>
               ) : (
                 <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700">
                   Captcha is not configured. Add NEXT_PUBLIC_TURNSTILE_SITE_KEY in the frontend

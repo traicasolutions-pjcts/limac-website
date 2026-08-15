@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Eye, LogOut, RefreshCw, X } from 'lucide-react'
+import { ChevronLeft, Eye, LogOut, RefreshCw, Trash2, X } from 'lucide-react'
 import {
+  deleteWarrantyRegistration,
   getWarrantyBillAccess,
   getWarrantyRegistration,
   updateWarrantyRegistrationStatus,
@@ -12,6 +13,7 @@ import type { AdminRegistrationDetail, RegistrationStatus } from '@/types/warran
 import {
   clearAdminSession,
   getAdminAccessToken,
+  isSuperAdmin,
   isAdminSessionExpired,
   touchAdminSession,
 } from '@/components/warranty/adminSession'
@@ -26,6 +28,11 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     contentType: string
     url: string
   } | null>(null)
+  const [canDelete, setCanDelete] = useState(false)
+  const [statusAction, setStatusAction] = useState<RegistrationStatus | null>(null)
+  const [statusReason, setStatusReason] = useState('')
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   function logout() {
     clearAdminSession()
@@ -53,6 +60,7 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   }
 
   useEffect(() => {
+    setCanDelete(isSuperAdmin())
     load()
     const timer = window.setInterval(() => {
       if (isAdminSessionExpired()) logout()
@@ -61,17 +69,29 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  async function changeStatus(nextStatus: RegistrationStatus) {
+  function changeStatus(nextStatus: RegistrationStatus) {
+    if (!detail || nextStatus === detail.status) return
+    setStatusReason('')
+    setStatusAction(nextStatus)
+  }
+
+  async function confirmStatusChange() {
     const token = getAdminAccessToken()
     if (!token) return logout()
+    if (!detail || !statusAction) return
     let reason: string | undefined
-    if (nextStatus === 'REJECTED' || nextStatus === 'MORE_INFORMATION_REQUIRED') {
-      reason = window.prompt('Enter reason or message for this status change:') || undefined
-      if (!reason) return
+    if (statusAction === 'REJECTED' || statusAction === 'MORE_INFORMATION_REQUIRED') {
+      reason = statusReason.trim()
+      if (!reason) {
+        setError('Reason is required for this status change.')
+        return
+      }
     }
     setUpdating(true)
     try {
-      await updateWarrantyRegistrationStatus(token, id, nextStatus, reason)
+      await updateWarrantyRegistrationStatus(token, id, statusAction, reason)
+      setStatusAction(null)
+      setStatusReason('')
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update status.')
@@ -92,6 +112,27 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to open bill.')
+    }
+  }
+
+  async function deleteRegistration() {
+    if (!detail) return
+    const token = getAdminAccessToken()
+    if (!token) return logout()
+    const reference = detail.registration_number
+    if (deleteConfirmation !== reference) {
+      setError('Type the exact registration reference to confirm deletion.')
+      return
+    }
+
+    setUpdating(true)
+    setError(null)
+    try {
+      await deleteWarrantyRegistration(token, id)
+      window.location.href = '/admin/warranty/registrations'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete registration.')
+      setUpdating(false)
     }
   }
 
@@ -141,6 +182,20 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
             <LogOut size={16} />
             Logout
           </button>
+          {canDelete ? (
+            <button
+              type="button"
+              disabled={updating}
+              onClick={() => {
+                setDeleteConfirmation('')
+                setShowDeleteModal(true)
+              }}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 bg-gray-900 px-3 py-2 text-sm font-semibold text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -226,6 +281,85 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
           <p className="mt-3 text-sm text-limac-muted">No admin decision yet.</p>
         )}
       </div>
+
+      {statusAction ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-white">Confirm status change</h2>
+            <p className="mt-3 text-sm text-limac-muted">
+              Change {detail.registration_number} from{' '}
+              <span className="font-semibold text-white">{detail.status}</span> to{' '}
+              <span className="font-semibold text-white">{statusAction}</span>?
+            </p>
+            {statusAction === 'REJECTED' || statusAction === 'MORE_INFORMATION_REQUIRED' ? (
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-sm font-semibold text-white">Reason</span>
+                <textarea
+                  required
+                  value={statusReason}
+                  onChange={(event) => setStatusReason(event.target.value)}
+                  className="min-h-24 w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+                />
+              </label>
+            ) : null}
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setStatusAction(null)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updating}
+                onClick={confirmStatusChange}
+                className="rounded-lg bg-limac-green px-4 py-2 text-sm font-semibold text-limac-black disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Update status
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showDeleteModal ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-red-500/40 bg-gray-900 p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-white">Delete registration</h2>
+            <p className="mt-3 text-sm text-limac-muted">
+              This removes the request from the live queue. A backup snapshot remains in MongoDB.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-white">
+                Type {detail.registration_number} to confirm
+              </span>
+              <input
+                value={deleteConfirmation}
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-red-400"
+              />
+            </label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updating || deleteConfirmation !== detail.registration_number}
+                onClick={deleteRegistration}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {billPreview ? (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black/70 px-4">

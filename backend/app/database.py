@@ -81,6 +81,13 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
             IndexModel([("anti_abuse.idempotency_hash", ASCENDING)], name="idempotency_lookup"),
         ]
     )
+    await db.warranty_registration_backups.create_indexes(
+        [
+            IndexModel([("registration_number", ASCENDING), ("created_at", DESCENDING)], name="backup_registration"),
+            IndexModel([("action", ASCENDING), ("created_at", DESCENDING)], name="backup_action"),
+            IndexModel([("created_at", DESCENDING)], name="backup_created"),
+        ]
+    )
     await db.warranties.create_indexes(
         [
             IndexModel([("warranty_number", ASCENDING)], unique=True, name="uniq_warranty_number"),
