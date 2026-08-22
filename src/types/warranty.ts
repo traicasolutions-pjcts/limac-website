@@ -27,7 +27,8 @@ export interface WarrantyRegistrationPayload {
     pin_code: string
     mobile_number: string
   }
-  serial_number: string
+  serial_number?: string
+  serial_numbers: string[]
   product_model?: string
   purchase: {
     purchase_date: string
@@ -117,8 +118,11 @@ export interface AdminRegistrationRow {
   mobile_number: string
   serial_number: string
   serial_normalized: string
+  component_serial_numbers?: string[]
   invoice_number: string
   dealer_name: string
+  purchase_date: string
+  warranty_expiry_date?: string
   submitted_at: string
   serial_validation_result?: SerialValidationResult
   has_bill: boolean
@@ -152,9 +156,14 @@ export interface AdminRegistrationDetail {
     serial_number: string
     serial_normalized: string
     product_model_customer?: string
+    components?: Array<{
+      serial_number: string
+      serial_normalized: string
+    }>
   }
   purchase: {
     purchase_date: string
+    warranty_expiry_date?: string
     invoice_number: string
     dealer_name: string
     dealer_code?: string
@@ -163,6 +172,13 @@ export interface AdminRegistrationDetail {
   serial_validation?: {
     result?: SerialValidationResult
     serial_normalized?: string
+    components?: Array<{
+      serial_number: string
+      serial_normalized?: string | null
+      result?: SerialValidationResult
+      product_model?: string | null
+      product_status?: string | null
+    }>
   }
   bill_asset?: {
     provider?: string

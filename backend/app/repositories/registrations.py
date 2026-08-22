@@ -38,7 +38,16 @@ class RegistrationRepository:
     ) -> dict[str, Any]:
         now = utc_now()
         registration_number = await self.next_registration_number()
-        serial_normalized = normalize_serial(payload.serial_number)
+        serial_numbers = payload.component_serial_numbers()
+        primary_serial = serial_numbers[0]
+        serial_normalized = normalize_serial(primary_serial)
+        components = [
+            {
+                "serial_number": serial_number,
+                "serial_normalized": normalize_serial(serial_number),
+            }
+            for serial_number in serial_numbers
+        ]
         mobile_normalized = normalize_mobile(payload.customer.mobile_number)
         document = {
             "registration_number": registration_number,
@@ -47,9 +56,10 @@ class RegistrationRepository:
                 "mobile_normalized": mobile_normalized,
             },
             "product": {
-                "serial_number": payload.serial_number,
+                "serial_number": primary_serial,
                 "serial_normalized": serial_normalized,
                 "product_model_customer": payload.product_model,
+                "components": components,
             },
             "serial_normalized": serial_normalized,
             "purchase": {
@@ -112,6 +122,7 @@ class RegistrationRepository:
         next_status: RegistrationStatus,
         admin_id: str,
         reason: str | None,
+        warranty_expiry_date: date | None = None,
     ) -> dict[str, Any] | None:
         query: dict[str, Any]
         if ObjectId.is_valid(registration_id):
@@ -125,10 +136,15 @@ class RegistrationRepository:
             "reason": reason,
             "created_at": now,
         }
+        update_set: dict[str, Any] = {"status": next_status, "updated_at": now, "reviewed_at": now}
+        if warranty_expiry_date:
+            warranty_expiry_value = warranty_expiry_date.isoformat()
+            update_set["purchase.warranty_expiry_date"] = warranty_expiry_value
+            event["warranty_expiry_date"] = warranty_expiry_value
         updated = await self.collection.find_one_and_update(
             query,
             {
-                "$set": {"status": next_status, "updated_at": now, "reviewed_at": now},
+                "$set": update_set,
                 "$push": {"decision_history": event},
             },
             return_document=ReturnDocument.AFTER,
@@ -201,6 +217,7 @@ class RegistrationRepository:
                 {"customer.mobile_number": {"$regex": escaped, "$options": "i"}},
                 {"registration_number": {"$regex": escaped, "$options": "i"}},
                 {"product.serial_normalized": {"$regex": escaped, "$options": "i"}},
+                {"product.components.serial_normalized": {"$regex": escaped, "$options": "i"}},
             ]
             digits = re.sub(r"\D+", "", term)
             if digits:
@@ -218,6 +235,7 @@ class RegistrationRepository:
                 {"snapshot.customer.mobile_number": {"$regex": escaped, "$options": "i"}},
                 {"snapshot.registration_number": {"$regex": escaped, "$options": "i"}},
                 {"snapshot.product.serial_normalized": {"$regex": escaped, "$options": "i"}},
+                {"snapshot.product.components.serial_normalized": {"$regex": escaped, "$options": "i"}},
             ]
             digits = re.sub(r"\D+", "", term)
             if digits:
@@ -281,6 +299,14 @@ class RegistrationRepository:
         customer = row.get("customer", {})
         product = row.get("product", {})
         purchase = row.get("purchase", {})
+        components = product.get("components") or []
+        component_serials = [
+            component.get("serial_number")
+            for component in components
+            if isinstance(component, dict) and component.get("serial_number")
+        ]
+        if not component_serials and product.get("serial_number"):
+            component_serials = [product.get("serial_number")]
         submitted_at = row.get("submitted_at")
         return {
             "id": str(row["_id"]) if isinstance(row.get("_id"), ObjectId) else str(row.get("_id")),
@@ -289,10 +315,13 @@ class RegistrationRepository:
             "status": row.get("status"),
             "customer_name": customer.get("name"),
             "mobile_number": customer.get("mobile_number"),
-            "serial_number": product.get("serial_number"),
+            "serial_number": ", ".join(component_serials),
             "serial_normalized": product.get("serial_normalized"),
+            "component_serial_numbers": component_serials,
             "invoice_number": purchase.get("invoice_number"),
             "dealer_name": purchase.get("dealer_name"),
+            "purchase_date": self._serialize_value(purchase.get("purchase_date")),
+            "warranty_expiry_date": self._serialize_value(purchase.get("warranty_expiry_date")),
             "submitted_at": submitted_at.isoformat() if submitted_at else None,
             "serial_validation_result": (row.get("serial_validation") or {}).get("result"),
             "has_bill": bool(row.get("bill_asset")),

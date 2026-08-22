@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { Download, Eye, LogOut, PackagePlus, RefreshCw, Search, Trash2, UserPlus, X } from 'lucide-react'
 import {
   deleteWarrantyRegistration,
+  downloadWarrantyBillFile,
   downloadWarrantyRegistrationsCsv,
-  getWarrantyBillAccess,
   listWarrantyRegistrations,
   updateWarrantyRegistrationStatus,
 } from '@/services/warrantyApi'
@@ -43,6 +43,7 @@ export default function AdminRegistrationsClient() {
     filename: string
     contentType: string
     url: string
+    objectUrl?: string
   } | null>(null)
   const [canManageUsers, setCanManageUsers] = useState(false)
   const [statusAction, setStatusAction] = useState<{
@@ -50,6 +51,7 @@ export default function AdminRegistrationsClient() {
     nextStatus: RegistrationStatus
   } | null>(null)
   const [statusReason, setStatusReason] = useState('')
+  const [warrantyExpiryDate, setWarrantyExpiryDate] = useState('')
   const [deleteAction, setDeleteAction] = useState<AdminRegistrationRow | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
 
@@ -125,6 +127,7 @@ export default function AdminRegistrationsClient() {
   function changeStatus(row: AdminRegistrationRow, nextStatus: RegistrationStatus) {
     if (nextStatus === row.status) return
     setStatusReason('')
+    setWarrantyExpiryDate('')
     setStatusAction({ row, nextStatus })
   }
 
@@ -146,12 +149,21 @@ export default function AdminRegistrationsClient() {
         return
       }
     }
+    if (nextStatus === 'APPROVED' && !warrantyExpiryDate) {
+      setError('Warranty expiry date is required for approval.')
+      return
+    }
+    if (nextStatus === 'APPROVED' && warrantyExpiryDate < row.purchase_date) {
+      setError('Warranty expiry date cannot be earlier than purchase date.')
+      return
+    }
     setUpdatingId(identifier)
     setError(null)
     try {
-      await updateWarrantyRegistrationStatus(token, identifier, nextStatus, reason)
+      await updateWarrantyRegistrationStatus(token, identifier, nextStatus, reason, warrantyExpiryDate)
       setStatusAction(null)
       setStatusReason('')
+      setWarrantyExpiryDate('')
       await load()
     } catch (err) {
       setStatusAction(null)
@@ -170,15 +182,25 @@ export default function AdminRegistrationsClient() {
       return
     }
     try {
-      const bill = await getWarrantyBillAccess(token, identifier)
+      const bill = await downloadWarrantyBillFile(token, identifier)
+      const objectUrl = window.URL.createObjectURL(bill.blob)
+      closeBillPreview()
       setBillPreview({
         filename: bill.filename,
-        contentType: bill.content_type,
-        url: bill.url,
+        contentType: bill.contentType,
+        url: objectUrl,
+        objectUrl,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to open bill.')
     }
+  }
+
+  function closeBillPreview() {
+    setBillPreview((current) => {
+      if (current?.objectUrl) window.URL.revokeObjectURL(current.objectUrl)
+      return null
+    })
   }
 
   function deleteRegistration(row: AdminRegistrationRow) {
@@ -356,7 +378,7 @@ export default function AdminRegistrationsClient() {
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Serial</th>
-                <th className="px-4 py-3">Invoice</th>
+                <th className="px-4 py-3">Warranty</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Submitted</th>
                 <th className="px-4 py-3">Actions</th>
@@ -394,8 +416,11 @@ export default function AdminRegistrationsClient() {
                       <div className="text-xs text-limac-muted">{row.serial_validation_result || 'ADVISORY'}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div>{row.invoice_number}</div>
-                      <div className="text-xs text-limac-muted">{row.dealer_name}</div>
+                      {row.status === 'APPROVED' ? (
+                        <WarrantyExpiryCell value={row.warranty_expiry_date} />
+                      ) : (
+                        <span aria-label="No warranty expiry date" />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <select
@@ -467,6 +492,24 @@ export default function AdminRegistrationsClient() {
                 />
               </label>
             ) : null}
+            {statusAction.nextStatus === 'APPROVED' ? (
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-sm font-semibold text-white">
+                  Warranty expiry date
+                </span>
+                <input
+                  required
+                  type="date"
+                  min={statusAction.row.purchase_date}
+                  value={warrantyExpiryDate}
+                  onChange={(event) => setWarrantyExpiryDate(event.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+                />
+                <span className="mt-1.5 block text-xs text-limac-muted">
+                  Purchase date: {statusAction.row.purchase_date}
+                </span>
+              </label>
+            ) : null}
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
@@ -535,7 +578,7 @@ export default function AdminRegistrationsClient() {
               </div>
               <button
                 type="button"
-                onClick={() => setBillPreview(null)}
+                onClick={closeBillPreview}
                 className="rounded-lg p-2 text-limac-muted hover:bg-white/5 hover:text-white"
                 aria-label="Close bill preview"
               >
@@ -543,12 +586,22 @@ export default function AdminRegistrationsClient() {
               </button>
             </div>
             <div className="max-h-[72vh] overflow-auto bg-limac-black p-4">
-              {billPreview.contentType === 'application/pdf' ? (
-                <iframe
-                  src={billPreview.url}
-                  title={billPreview.filename}
-                  className="h-[70vh] w-full rounded-lg border border-gray-800 bg-white"
-                />
+              {isPdfBill(billPreview) ? (
+                <div className="space-y-3">
+                  <iframe
+                    src={billPreview.url}
+                    title={billPreview.filename}
+                    className="h-[70vh] w-full rounded-lg border border-gray-800 bg-white"
+                  />
+                  <a
+                    href={billPreview.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    Open PDF in new tab
+                  </a>
+                </div>
               ) : (
                 <img
                   src={billPreview.url}
@@ -575,4 +628,25 @@ function rowIdentifier(row: AdminRegistrationRow) {
     return row.registration_number
   }
   return undefined
+}
+
+function isPdfBill(bill: { filename: string; contentType: string }) {
+  return bill.contentType.toLowerCase().includes('pdf') || bill.filename.toLowerCase().endsWith('.pdf')
+}
+
+function WarrantyExpiryCell({ value }: { value?: string }) {
+  if (!value) {
+    return <span className="text-limac-muted">-</span>
+  }
+  const expired = value < new Date().toISOString().slice(0, 10)
+  return (
+    <div>
+      <div className={expired ? 'font-semibold text-red-500' : 'font-semibold text-limac-green'}>
+        {value}
+      </div>
+      <div className="text-xs text-limac-muted">
+        {expired ? 'Expired' : 'Warranty expiry'}
+      </div>
+    </div>
+  )
 }

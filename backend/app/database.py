@@ -77,6 +77,10 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
             ),
             IndexModel([("status", ASCENDING), ("submitted_at", DESCENDING)], name="queue_status"),
             IndexModel([("serial_normalized", ASCENDING), ("submitted_at", DESCENDING)], name="serial_queue"),
+            IndexModel(
+                [("product.components.serial_normalized", ASCENDING), ("submitted_at", DESCENDING)],
+                name="component_serial_queue",
+            ),
             IndexModel([("purchase.invoice_number", ASCENDING)], name="invoice_lookup"),
             IndexModel([("anti_abuse.idempotency_hash", ASCENDING)], name="idempotency_lookup"),
         ]

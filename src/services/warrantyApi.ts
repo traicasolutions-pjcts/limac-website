@@ -58,6 +58,7 @@ function formatValidationErrors(errors: Array<{ loc?: Array<string | number>; ms
     'body.customer.pin_code': 'PIN code',
     'body.customer.mobile_number': 'Mobile number',
     'body.serial_number': 'Product serial number',
+    'body.serial_numbers': 'Product serial numbers',
     'body.purchase.purchase_date': 'Purchase date',
     'body.purchase.invoice_number': 'Invoice number',
     'body.purchase.dealer_name': 'Dealer/shop name',
@@ -151,14 +152,19 @@ export function updateWarrantyRegistrationStatus(
   token: string,
   registrationId: string,
   status: string,
-  reason?: string
+  reason?: string,
+  warrantyExpiryDate?: string
 ) {
   return requestJson<{ id: string; status: string }>(`/admin/registrations/${registrationId}/status`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ status, reason }),
+    body: JSON.stringify({
+      status,
+      reason,
+      warranty_expiry_date: warrantyExpiryDate || undefined,
+    }),
   })
 }
 
@@ -199,6 +205,25 @@ export function getWarrantyBillAccess(token: string, registrationId: string) {
       Authorization: `Bearer ${token}`,
     },
   })
+}
+
+export async function downloadWarrantyBillFile(token: string, registrationId: string) {
+  const response = await fetch(`${API_BASE}/admin/registrations/${registrationId}/bill-file`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error(body?.detail || 'Unable to open bill.')
+  }
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get('Content-Type') || 'application/octet-stream',
+    filename: filenameMatch?.[1] || 'bill',
+  }
 }
 
 export function listWarrantyProducts(token: string, search?: string) {

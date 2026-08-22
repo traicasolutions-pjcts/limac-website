@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ChevronLeft, Eye, LogOut, RefreshCw, Trash2, X } from 'lucide-react'
 import {
   deleteWarrantyRegistration,
-  getWarrantyBillAccess,
+  downloadWarrantyBillFile,
   getWarrantyRegistration,
   updateWarrantyRegistrationStatus,
 } from '@/services/warrantyApi'
@@ -36,10 +36,12 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     filename: string
     contentType: string
     url: string
+    objectUrl?: string
   } | null>(null)
   const [canDelete, setCanDelete] = useState(false)
   const [statusAction, setStatusAction] = useState<RegistrationStatus | null>(null)
   const [statusReason, setStatusReason] = useState('')
+  const [warrantyExpiryDate, setWarrantyExpiryDate] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
@@ -81,6 +83,7 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   function changeStatus(nextStatus: RegistrationStatus) {
     if (!detail || nextStatus === detail.status) return
     setStatusReason('')
+    setWarrantyExpiryDate('')
     setStatusAction(nextStatus)
   }
 
@@ -96,11 +99,20 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
         return
       }
     }
+    if (statusAction === 'APPROVED' && !warrantyExpiryDate) {
+      setError('Warranty expiry date is required for approval.')
+      return
+    }
+    if (statusAction === 'APPROVED' && warrantyExpiryDate < detail.purchase.purchase_date) {
+      setError('Warranty expiry date cannot be earlier than purchase date.')
+      return
+    }
     setUpdating(true)
     try {
-      await updateWarrantyRegistrationStatus(token, id, statusAction, reason)
+      await updateWarrantyRegistrationStatus(token, id, statusAction, reason, warrantyExpiryDate)
       setStatusAction(null)
       setStatusReason('')
+      setWarrantyExpiryDate('')
       await load()
     } catch (err) {
       setStatusAction(null)
@@ -114,15 +126,25 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     const token = getAdminAccessToken()
     if (!token) return logout()
     try {
-      const bill = await getWarrantyBillAccess(token, id)
+      const bill = await downloadWarrantyBillFile(token, id)
+      const objectUrl = window.URL.createObjectURL(bill.blob)
+      closeBillPreview()
       setBillPreview({
         filename: bill.filename,
-        contentType: bill.content_type,
-        url: bill.url,
+        contentType: bill.contentType,
+        url: objectUrl,
+        objectUrl,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to open bill.')
     }
+  }
+
+  function closeBillPreview() {
+    setBillPreview((current) => {
+      if (current?.objectUrl) window.URL.revokeObjectURL(current.objectUrl)
+      return null
+    })
   }
 
   async function deleteRegistration() {
@@ -158,8 +180,15 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     )
   }
 
-  const warrantyExpiryDate = addYears(detail.purchase.purchase_date, 5)
   const serialNote = serialComparisonNote(detail.serial_validation?.result)
+  const componentSerials = detail.product.components?.length
+    ? detail.product.components.map((component) => component.serial_number)
+    : [detail.product.serial_number]
+  const componentValidation = detail.serial_validation?.components?.length
+    ? detail.serial_validation.components
+        .map((component) => `${component.serial_number}: ${component.result || '-'}`)
+        .join(', ')
+    : detail.serial_validation?.result || '-'
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -247,17 +276,17 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
         <InfoCard
           title="Product"
           items={[
-            ['Serial', detail.product.serial_number],
+            ['Serials', componentSerials.join(', ')],
             ['Normalized serial', detail.product.serial_normalized],
             ['Customer model', detail.product.product_model_customer || '-'],
-            ['Validation', detail.serial_validation?.result || '-'],
+            ['Validation', componentValidation],
           ]}
           noteLabel="Product master note"
           note={`${serialNote} Matching ignores uppercase/lowercase differences and spaces.`}
         />
         <InfoCard title="Purchase" items={[
           ['Purchase date', detail.purchase.purchase_date],
-          ['Warranty expiry', warrantyExpiryDate],
+          ['Warranty expiry', detail.purchase.warranty_expiry_date || '-'],
           ['Invoice', detail.purchase.invoice_number],
           ['Dealer/shop', detail.purchase.dealer_name],
           ['Dealer code', detail.purchase.dealer_code || '-'],
@@ -317,6 +346,21 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
                   value={statusReason}
                   onChange={(event) => setStatusReason(event.target.value)}
                   className="min-h-24 w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+                />
+              </label>
+            ) : null}
+            {statusAction === 'APPROVED' ? (
+              <label className="mt-4 block">
+                <span className="mb-1.5 block text-sm font-semibold text-white">
+                  Warranty expiry date
+                </span>
+                <input
+                  required
+                  type="date"
+                  min={detail.purchase.purchase_date}
+                  value={warrantyExpiryDate}
+                  onChange={(event) => setWarrantyExpiryDate(event.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
                 />
               </label>
             ) : null}
@@ -389,7 +433,7 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
               </div>
               <button
                 type="button"
-                onClick={() => setBillPreview(null)}
+                onClick={closeBillPreview}
                 className="rounded-lg p-2 text-limac-muted hover:bg-white/5 hover:text-white"
                 aria-label="Close bill preview"
               >
@@ -397,12 +441,22 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
               </button>
             </div>
             <div className="max-h-[72vh] overflow-auto bg-limac-black p-4">
-              {billPreview.contentType === 'application/pdf' ? (
-                <iframe
-                  src={billPreview.url}
-                  title={billPreview.filename}
-                  className="h-[70vh] w-full rounded-lg border border-gray-800 bg-white"
-                />
+              {isPdfBill(billPreview) ? (
+                <div className="space-y-3">
+                  <iframe
+                    src={billPreview.url}
+                    title={billPreview.filename}
+                    className="h-[70vh] w-full rounded-lg border border-gray-800 bg-white"
+                  />
+                  <a
+                    href={billPreview.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    Open PDF in new tab
+                  </a>
+                </div>
               ) : (
                 <img
                   src={billPreview.url}
@@ -450,13 +504,6 @@ function InfoCard({
   )
 }
 
-function addYears(dateString: string, years: number) {
-  const date = new Date(dateString)
-  if (Number.isNaN(date.getTime())) return '-'
-  date.setFullYear(date.getFullYear() + years)
-  return date.toISOString().slice(0, 10)
-}
-
 function statusLabel(status: RegistrationStatus) {
   return {
     PENDING: 'Pending',
@@ -466,6 +513,10 @@ function statusLabel(status: RegistrationStatus) {
     REJECTED: 'Rejected',
     CANCELLED: 'Cancelled',
   }[status]
+}
+
+function isPdfBill(bill: { filename: string; contentType: string }) {
+  return bill.contentType.toLowerCase().includes('pdf') || bill.filename.toLowerCase().endsWith('.pdf')
 }
 
 function serialComparisonNote(result?: string) {

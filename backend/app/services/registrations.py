@@ -28,19 +28,58 @@ async def create_warranty_registration(
 ) -> WarrantyRegistrationCreated:
     repository = RegistrationRepository(db)
     product_repository = ProductRepository(db)
-    existing_product = await product_repository.get_by_serial(payload.serial_number)
-    reserved_product = None
-    if existing_product:
+    serial_numbers = payload.component_serial_numbers()
+    existing_products: list[tuple[str, dict[str, Any] | None]] = []
+    reserved_products: list[dict[str, Any]] = []
+    reserved_serials: list[str] = []
+    for serial_number in serial_numbers:
+        existing_product = await product_repository.get_by_serial(serial_number)
+        if not existing_product:
+            existing_products.append((serial_number, None))
+            continue
         product_status = existing_product.get("status")
         if product_status == ProductStatus.REGISTERED:
-            raise RegistrationSerialError("Warranty is already assigned for this serial number.")
+            raise RegistrationSerialError(f"Warranty is already assigned for serial number {serial_number}.")
         if product_status == ProductStatus.REGISTRATION_PENDING:
-            raise RegistrationSerialError("A warranty registration request is already open for this serial number.")
+            raise RegistrationSerialError(
+                f"A warranty registration request is already open for serial number {serial_number}."
+            )
         if product_status != ProductStatus.AVAILABLE:
-            raise RegistrationSerialError("This serial number is not eligible for warranty registration.")
-        reserved_product = await product_repository.reserve_for_registration(payload.serial_number)
-        if not reserved_product:
-            raise RegistrationSerialError("A warranty registration request is already open for this serial number.")
+            raise RegistrationSerialError(f"Serial number {serial_number} is not eligible for warranty registration.")
+        existing_products.append((serial_number, existing_product))
+
+    try:
+        for serial_number, existing_product in existing_products:
+            if not existing_product:
+                continue
+            reserved_product = await product_repository.reserve_for_registration(serial_number)
+            if not reserved_product:
+                raise RegistrationSerialError(
+                    f"A warranty registration request is already open for serial number {serial_number}."
+                )
+            reserved_products.append(reserved_product)
+            reserved_serials.append(serial_number)
+    except Exception:
+        for serial_number in reserved_serials:
+            await product_repository.release_pending_registration(serial_number)
+        raise
+
+    reserved_by_serial = {
+        normalize_serial(str(product.get("serial_number"))): product
+        for product in reserved_products
+    }
+    validation_components = [
+        {
+            "serial_number": serial_number,
+            "serial_normalized": normalize_serial(serial_number),
+            "matched_product_id": (
+                str(reserved_by_serial[normalize_serial(serial_number)].get("_id"))
+                if normalize_serial(serial_number) in reserved_by_serial
+                else None
+            ),
+        }
+        for serial_number in serial_numbers
+    ]
 
     try:
         document = await repository.create_pending(
@@ -49,25 +88,54 @@ async def create_warranty_registration(
             serial_validation_snapshot={
                 "result": None,
                 "checked_at": None,
-                "serial_normalized": normalize_serial(payload.serial_number),
-                "matched_product_id": str(reserved_product.get("_id")) if reserved_product else None,
+                "serial_normalized": normalize_serial(serial_numbers[0]),
+                "matched_product_id": validation_components[0].get("matched_product_id")
+                if validation_components
+                else None,
                 "existing_warranty_id": None,
+                "components": validation_components,
             },
         )
     except Exception:
-        if reserved_product:
-            await product_repository.release_pending_registration(payload.serial_number)
+        for serial_number in reserved_serials:
+            await product_repository.release_pending_registration(serial_number)
         raise
-    if reserved_product:
-        await product_repository.attach_pending_registration(
-            payload.serial_number,
-            document["registration_number"],
-        )
+    if reserved_products:
+        for serial_number in reserved_serials:
+            await product_repository.attach_pending_registration(
+                serial_number,
+                document["registration_number"],
+            )
     return WarrantyRegistrationCreated(
         registration_number=document["registration_number"],
         status=RegistrationStatus(document["status"]),
         submitted_at=document["submitted_at"],
     )
+
+
+def registration_component_serials(document: dict[str, Any]) -> list[str]:
+    product = document.get("product") or {}
+    components = product.get("components") or []
+    serials = [
+        str(component.get("serial_number"))
+        for component in components
+        if isinstance(component, dict) and component.get("serial_number")
+    ]
+    if serials:
+        return serials
+    serial_number = product.get("serial_number")
+    return [str(serial_number)] if serial_number else []
+
+
+async def release_registration_components(
+    product_repository: ProductRepository,
+    document: dict[str, Any],
+) -> None:
+    for serial_number in registration_component_serials(document):
+        await product_repository.release_pending_registration(
+            serial_number,
+            document.get("registration_number"),
+        )
 
 
 async def lookup_registration_status(
@@ -86,7 +154,8 @@ async def lookup_registration_status(
     )
     serial_matches = (
         payload.serial_number
-        and normalize_serial(payload.serial_number) == product.get("serial_normalized")
+        and normalize_serial(payload.serial_number)
+        in {normalize_serial(serial_number) for serial_number in registration_component_serials(document)}
     )
     if not mobile_matches and not serial_matches:
         return None
@@ -96,7 +165,7 @@ async def lookup_registration_status(
         status=RegistrationStatus(document["status"]),
         submitted_at=document.get("submitted_at"),
         masked_mobile=mask_mobile(customer.get("mobile_number", "")),
-        masked_serial=mask_serial(product.get("serial_number", "")),
+        masked_serial=mask_serial(payload.serial_number or product.get("serial_number", "")),
         warranty_number=document.get("warranty_number"),
         message=_status_message(document),
     )

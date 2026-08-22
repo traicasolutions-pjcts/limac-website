@@ -1,9 +1,9 @@
 'use client'
 
-import { FormEvent, useCallback, useMemo, useState } from 'react'
+import { FormEvent, ReactNode, useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Check, ChevronLeft, ChevronRight, FileUp, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, ChevronLeft, ChevronRight, FileUp, Loader2, Plus, Trash2 } from 'lucide-react'
 import Badge from '@/components/common/Badge'
 import TurnstileWidget from '@/components/warranty/TurnstileWidget'
 import { createWarrantyRegistration, uploadWarrantyBill } from '@/services/warrantyApi'
@@ -17,7 +17,7 @@ const emptyForm = {
   state: 'Kerala',
   pinCode: '',
   mobileNumber: '',
-  serialNumber: '',
+  serialNumbers: [''],
   productModel: '',
   purchaseDate: '',
   invoiceNumber: '',
@@ -45,6 +45,33 @@ export default function WarrantyRegisterClient() {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  function updateSerialNumber(index: number, value: string) {
+    setForm((current) => ({
+      ...current,
+      serialNumbers: current.serialNumbers.map((serialNumber, currentIndex) =>
+        currentIndex === index ? value : serialNumber
+      ),
+    }))
+  }
+
+  function addSerialNumber() {
+    setForm((current) => ({
+      ...current,
+      serialNumbers: [...current.serialNumbers, ''],
+    }))
+  }
+
+  function removeSerialNumber(index: number) {
+    setForm((current) => ({
+      ...current,
+      serialNumbers: current.serialNumbers.filter((_, currentIndex) => currentIndex !== index),
+    }))
+  }
+
+  function enteredSerialNumbers() {
+    return form.serialNumbers.map((serialNumber) => serialNumber.trim()).filter(Boolean)
+  }
+
   function canReview() {
     return (
       form.name &&
@@ -53,7 +80,7 @@ export default function WarrantyRegisterClient() {
       form.state &&
       form.pinCode &&
       form.mobileNumber &&
-      form.serialNumber &&
+      enteredSerialNumbers().length > 0 &&
       form.purchaseDate &&
       form.invoiceNumber &&
       form.dealerName &&
@@ -104,7 +131,8 @@ export default function WarrantyRegisterClient() {
         pin_code: form.pinCode,
         mobile_number: form.mobileNumber,
       },
-      serial_number: form.serialNumber,
+      serial_number: enteredSerialNumbers()[0],
+      serial_numbers: enteredSerialNumbers(),
       product_model: form.productModel || undefined,
       purchase: {
         purchase_date: form.purchaseDate,
@@ -143,6 +171,8 @@ export default function WarrantyRegisterClient() {
   function validateForm() {
     if (form.addressLine.trim().length < 5) return 'Address line must have at least 5 characters.'
     if (!/^\d{6}$/.test(form.pinCode.trim())) return 'PIN code must be exactly 6 digits.'
+    if (enteredSerialNumbers().length === 0) return 'Enter at least one product or component serial number.'
+    if (hasDuplicateSerials(enteredSerialNumbers())) return 'Product or component serial numbers must be unique.'
     if (form.purchaseDate && form.purchaseDate > today) return 'Purchase date cannot be greater than today.'
     if (form.invoiceNumber.trim().length < 1) return 'Invoice or bill number is required.'
     if (form.dealerName.trim().length < 2) return 'Dealer or shop name must have at least 2 characters.'
@@ -208,14 +238,44 @@ export default function WarrantyRegisterClient() {
             value={form.pinCode}
             onChange={(value) => updateField('pinCode', value)}
           />
-          <div className="space-y-2">
-            <Input
-              label="Product serial number"
-              required
-              hint="Enter the serial number printed on the product label."
-              value={form.serialNumber}
-              onChange={(value) => updateField('serialNumber', value)}
-            />
+          <div className="space-y-3 md:col-span-2">
+            <div>
+              <span className="mb-1.5 block text-sm font-semibold text-white">
+                Product/component serial numbers <span className="text-red-600">*</span>
+              </span>
+              <span className="mb-2 block text-xs text-limac-muted">
+                Add each serial number covered by this invoice.
+              </span>
+            </div>
+            {form.serialNumbers.map((serialNumber, index) => (
+              <div key={index} className="flex gap-2">
+                <input
+                  required={index === 0}
+                  value={serialNumber}
+                  onChange={(event) => updateSerialNumber(index, event.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-3 text-sm text-white outline-none transition focus:border-limac-green"
+                  aria-label={`Serial number ${index + 1}`}
+                />
+                {form.serialNumbers.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => removeSerialNumber(index)}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-red-500/40 text-red-300"
+                    aria-label={`Remove serial number ${index + 1}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addSerialNumber}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white"
+            >
+              <Plus size={16} />
+              Add serial number
+            </button>
           </div>
           <Input
             label="Product model"
@@ -274,7 +334,7 @@ export default function WarrantyRegisterClient() {
           <dl className="grid gap-4 text-sm md:grid-cols-2">
             <ReviewItem label="Name" value={form.name} />
             <ReviewItem label="Mobile" value={maskMobile(form.mobileNumber)} />
-            <ReviewItem label="Serial" value={maskSerial(form.serialNumber)} />
+            <ReviewItem label="Serials" value={enteredSerialNumbers().map(maskSerial).join(', ')} />
             <ReviewItem label="Purchase date" value={form.purchaseDate} />
             <ReviewItem label="Invoice" value={form.invoiceNumber} />
             <ReviewItem label="Dealer" value={form.dealerName} />
@@ -286,7 +346,15 @@ export default function WarrantyRegisterClient() {
               onChange={(checked) => updateField('warrantyTermsConsent', checked)}
             />
             <Checkbox
-              label="I consent to the privacy policy for warranty processing."
+              label={
+                <>
+                  I consent to the{' '}
+                  <Link href="/privacy-policy" className="font-semibold text-limac-blue hover:underline" target="_blank">
+                    privacy policy
+                  </Link>{' '}
+                  for warranty processing.
+                </>
+              }
               checked={form.privacyPolicyConsent}
               onChange={(checked) => updateField('privacyPolicyConsent', checked)}
             />
@@ -398,7 +466,7 @@ function Checkbox({
   checked,
   onChange,
 }: {
-  label: string
+  label: ReactNode
   checked: boolean
   onChange: (checked: boolean) => void
 }) {
@@ -422,4 +490,9 @@ function ReviewItem({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 font-semibold text-white">{value || 'Not provided'}</dd>
     </div>
   )
+}
+
+function hasDuplicateSerials(serialNumbers: string[]) {
+  const normalized = serialNumbers.map((serialNumber) => serialNumber.replace(/\s+/g, '').toUpperCase())
+  return new Set(normalized).size !== normalized.length
 }

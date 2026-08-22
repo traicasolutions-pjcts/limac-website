@@ -61,7 +61,40 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">4. Sharing of Information</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">4. Warranty Registration Data</h2>
+          <p className="text-limac-muted leading-relaxed mb-3">
+            When you submit a warranty registration, we collect and process the information required
+            to verify and manage your product warranty, including:
+          </p>
+          <ul className="text-limac-muted leading-relaxed space-y-2 pl-5 list-disc">
+            <li>Customer name, mobile number, address, city, state and PIN code</li>
+            <li>Product serial number or component serial numbers</li>
+            <li>Product model, purchase date, invoice/bill number, dealer or shop name</li>
+            <li>Uploaded invoice or bill copy</li>
+            <li>Warranty approval status, warranty expiry date, and admin review history</li>
+          </ul>
+          <p className="text-limac-muted leading-relaxed mt-3 mb-3">
+            We use this information only to:
+          </p>
+          <ul className="text-limac-muted leading-relaxed space-y-2 pl-5 list-disc">
+            <li>Verify the product and purchase details</li>
+            <li>Process, approve, reject, or manage warranty requests</li>
+            <li>Prevent duplicate or fraudulent warranty claims</li>
+            <li>Provide warranty status lookup and support</li>
+            <li>Maintain warranty records for business, service, and legal purposes</li>
+          </ul>
+          <p className="text-limac-muted leading-relaxed mt-3">
+            Uploaded bills and warranty documents may be stored securely with our cloud storage
+            provider. Warranty records may be retained for the warranty period and for a reasonable
+            period afterward for service, audit, legal, and dispute-resolution purposes.
+          </p>
+          <p className="text-limac-muted leading-relaxed mt-3">
+            We do <strong className="text-white">not</strong> sell or rent warranty registration data.
+          </p>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">5. Sharing of Information</h2>
           <p className="text-limac-muted leading-relaxed">
             We may share your data with the following service providers solely to operate our website:
           </p>
@@ -73,7 +106,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">5. Data Retention</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">6. Data Retention</h2>
           <p className="text-limac-muted leading-relaxed">
             Enquiry records are retained for up to 2 years for business purposes and then deleted. You may
             request deletion of your data at any time by contacting us.
@@ -81,7 +114,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">6. Cookies</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">7. Cookies</h2>
           <p className="text-limac-muted leading-relaxed">
             We use only essential session cookies required to operate the website. We do not use
             advertising or tracking cookies. No consent banner is required.
@@ -89,7 +122,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">7. Your Rights</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">8. Your Rights</h2>
           <p className="text-limac-muted leading-relaxed">
             You have the right to access, correct, or delete your personal data held by us. To exercise
             these rights, please email us at{' '}
@@ -100,7 +133,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">8. Security</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">9. Security</h2>
           <p className="text-limac-muted leading-relaxed">
             We implement industry-standard security measures including HTTPS encryption and access
             controls to protect your data. No method of transmission over the internet is 100% secure,
@@ -109,7 +142,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">9. Changes to This Policy</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">10. Changes to This Policy</h2>
           <p className="text-limac-muted leading-relaxed">
             We may update this policy from time to time. The "Last updated" date at the top will reflect
             any changes. Continued use of the site after changes constitutes acceptance.
@@ -117,7 +150,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div>
-          <h2 className="text-xl font-semibold text-limac-cyan mb-3">10. Contact Us</h2>
+          <h2 className="text-xl font-semibold text-limac-cyan mb-3">11. Contact Us</h2>
           <p className="text-limac-muted leading-relaxed">
             For any privacy-related questions, please contact:
           </p>
