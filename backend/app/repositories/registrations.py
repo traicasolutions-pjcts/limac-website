@@ -71,7 +71,15 @@ class RegistrationRepository:
             "review_started_at": None,
             "reviewed_at": None,
             "reviewer_ids": [],
-            "decision_history": [],
+            "decision_history": [
+                {
+                    "event_type": "REGISTRATION_RECEIVED",
+                    "status": RegistrationStatus.PENDING,
+                    "admin_id": None,
+                    "reason": None,
+                    "created_at": now,
+                }
+            ],
             "consent": {
                 "warranty_terms_accepted": payload.warranty_terms_consent,
                 "privacy_policy_accepted": payload.privacy_policy_consent,
@@ -122,7 +130,8 @@ class RegistrationRepository:
         next_status: RegistrationStatus,
         admin_id: str,
         reason: str | None,
-        warranty_expiry_date: date | None = None,
+        replacement_warranty_expiry_date: date | None = None,
+        service_warranty_expiry_date: date | None = None,
     ) -> dict[str, Any] | None:
         query: dict[str, Any]
         if ObjectId.is_valid(registration_id):
@@ -131,16 +140,21 @@ class RegistrationRepository:
             query = {"registration_number": registration_id.strip()}
         now = utc_now()
         event = {
+            "event_type": "STATUS_UPDATED",
             "status": next_status,
             "admin_id": admin_id,
             "reason": reason,
             "created_at": now,
         }
         update_set: dict[str, Any] = {"status": next_status, "updated_at": now, "reviewed_at": now}
-        if warranty_expiry_date:
-            warranty_expiry_value = warranty_expiry_date.isoformat()
-            update_set["purchase.warranty_expiry_date"] = warranty_expiry_value
-            event["warranty_expiry_date"] = warranty_expiry_value
+        if replacement_warranty_expiry_date:
+            replacement_value = replacement_warranty_expiry_date.isoformat()
+            update_set["purchase.replacement_warranty_expiry_date"] = replacement_value
+            event["replacement_warranty_expiry_date"] = replacement_value
+        if service_warranty_expiry_date:
+            service_value = service_warranty_expiry_date.isoformat()
+            update_set["purchase.service_warranty_expiry_date"] = service_value
+            event["service_warranty_expiry_date"] = service_value
         updated = await self.collection.find_one_and_update(
             query,
             {
@@ -151,6 +165,61 @@ class RegistrationRepository:
         )
         if updated:
             await self._write_backup_snapshot(action="STATUS_UPDATED", snapshot=updated, admin_id=admin_id)
+        return updated
+
+    async def update_warranty_dates(
+        self,
+        *,
+        registration_id: str,
+        admin_id: str,
+        replacement_warranty_expiry_date: date,
+        service_warranty_expiry_date: date,
+        reason: str | None = None,
+    ) -> dict[str, Any] | None:
+        query: dict[str, Any]
+        if ObjectId.is_valid(registration_id):
+            query = {"_id": ObjectId(registration_id)}
+        else:
+            query = {"registration_number": registration_id.strip()}
+        now = utc_now()
+        replacement_value = replacement_warranty_expiry_date.isoformat()
+        service_value = service_warranty_expiry_date.isoformat()
+        current = await self.collection.find_one(query)
+        if not current:
+            return None
+        purchase = current.get("purchase") or {}
+        event = {
+            "event_type": "WARRANTY_DATES_UPDATED",
+            "status": current.get("status"),
+            "admin_id": admin_id,
+            "reason": reason,
+            "created_at": now,
+            "previous": {
+                "replacement_warranty_expiry_date": (
+                    purchase.get("replacement_warranty_expiry_date")
+                    or purchase.get("warranty_expiry_date")
+                ),
+                "service_warranty_expiry_date": purchase.get("service_warranty_expiry_date"),
+            },
+            "updated": {
+                "replacement_warranty_expiry_date": replacement_value,
+                "service_warranty_expiry_date": service_value,
+            },
+        }
+        updated = await self.collection.find_one_and_update(
+            query,
+            {
+                "$set": {
+                    "purchase.replacement_warranty_expiry_date": replacement_value,
+                    "purchase.service_warranty_expiry_date": service_value,
+                    "updated_at": now,
+                },
+                "$push": {"decision_history": event},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        if updated:
+            await self._write_backup_snapshot(action="WARRANTY_DATES_UPDATED", snapshot=updated, admin_id=admin_id)
         return updated
 
     async def delete_by_id(self, registration_id: str, *, admin_id: str | None = None) -> bool:
@@ -171,17 +240,31 @@ class RegistrationRepository:
         *,
         status: str | None = None,
         search: str | None = None,
+        warranty_filter: str | None = None,
         limit: int = 50,
         skip: int = 0,
     ) -> list[dict[str, Any]]:
-        query = self._admin_query(status=status, search=search)
-        cursor = (
-            self.collection.find(query)
-            .sort("submitted_at", -1)
-            .skip(max(skip, 0))
-            .limit(min(max(limit, 1), 100))
-        )
+        query = self._admin_query(status=status, search=search, warranty_filter=warranty_filter)
+        sort_field = self._warranty_sort_field(warranty_filter)
+        sort_spec = [(sort_field, 1), ("submitted_at", -1)] if sort_field else [("submitted_at", -1)]
+        cursor = self.collection.find(query).sort(sort_spec).skip(max(skip, 0)).limit(min(max(limit, 1), 100))
         return [self._serialize_admin_row(row) async for row in cursor]
+
+    async def warranty_summary(self) -> dict[str, int]:
+        return {
+            "replacement_expired": await self.collection.count_documents(
+                self._admin_query(warranty_filter="replacement_expired")
+            ),
+            "service_expired": await self.collection.count_documents(
+                self._admin_query(warranty_filter="service_expired")
+            ),
+            "replacement_under_warranty": await self.collection.count_documents(
+                self._admin_query(warranty_filter="replacement_under_warranty")
+            ),
+            "service_under_warranty": await self.collection.count_documents(
+                self._admin_query(warranty_filter="service_under_warranty")
+            ),
+        }
 
     async def list_export_documents(
         self,
@@ -205,10 +288,17 @@ class RegistrationRepository:
 
         return sorted(rows, key=lambda row: row.get("submitted_at") or "", reverse=True)
 
-    def _admin_query(self, *, status: str | None = None, search: str | None = None) -> dict[str, Any]:
+    def _admin_query(
+        self,
+        *,
+        status: str | None = None,
+        search: str | None = None,
+        warranty_filter: str | None = None,
+    ) -> dict[str, Any]:
         query: dict[str, Any] = {}
         if status:
             query["status"] = status
+        self._apply_warranty_filter(query, warranty_filter)
         if search and search.strip():
             term = search.strip()
             escaped = re.escape(term)
@@ -219,11 +309,55 @@ class RegistrationRepository:
                 {"product.serial_normalized": {"$regex": escaped, "$options": "i"}},
                 {"product.components.serial_normalized": {"$regex": escaped, "$options": "i"}},
             ]
+            normalized_serial = normalize_serial(term)
+            if normalized_serial and normalized_serial != term:
+                normalized_escaped = re.escape(normalized_serial)
+                search_clauses.extend([
+                    {"product.serial_normalized": {"$regex": normalized_escaped, "$options": "i"}},
+                    {"product.components.serial_normalized": {"$regex": normalized_escaped, "$options": "i"}},
+                ])
             digits = re.sub(r"\D+", "", term)
             if digits:
                 search_clauses.append({"customer.mobile_normalized": {"$regex": re.escape(digits)}})
-            query["$or"] = search_clauses
+            existing_or = query.pop("$or", None)
+            if existing_or:
+                query["$and"] = [{"$or": existing_or}, {"$or": search_clauses}]
+            else:
+                query["$or"] = search_clauses
         return query
+
+    def _apply_warranty_filter(self, query: dict[str, Any], warranty_filter: str | None) -> None:
+        if not warranty_filter:
+            return
+        today = utc_now().date().isoformat()
+        query["status"] = RegistrationStatus.APPROVED
+        if warranty_filter == "replacement_expired":
+            query["$or"] = [
+                {"purchase.replacement_warranty_expiry_date": {"$exists": True, "$ne": "", "$lt": today}},
+                {
+                    "purchase.replacement_warranty_expiry_date": {"$in": [None, ""]},
+                    "purchase.warranty_expiry_date": {"$exists": True, "$ne": "", "$lt": today},
+                },
+            ]
+        elif warranty_filter == "replacement_under_warranty":
+            query["$or"] = [
+                {"purchase.replacement_warranty_expiry_date": {"$exists": True, "$ne": "", "$gte": today}},
+                {
+                    "purchase.replacement_warranty_expiry_date": {"$in": [None, ""]},
+                    "purchase.warranty_expiry_date": {"$exists": True, "$ne": "", "$gte": today},
+                },
+            ]
+        elif warranty_filter == "service_expired":
+            query["purchase.service_warranty_expiry_date"] = {"$exists": True, "$ne": "", "$lt": today}
+        elif warranty_filter == "service_under_warranty":
+            query["purchase.service_warranty_expiry_date"] = {"$exists": True, "$ne": "", "$gte": today}
+
+    def _warranty_sort_field(self, warranty_filter: str | None) -> str | None:
+        if warranty_filter in {"replacement_expired", "replacement_under_warranty"}:
+            return "purchase.replacement_warranty_expiry_date"
+        if warranty_filter in {"service_expired", "service_under_warranty"}:
+            return "purchase.service_warranty_expiry_date"
+        return None
 
     def _deleted_backup_query(self, *, search: str | None = None) -> dict[str, Any]:
         query: dict[str, Any] = {"action": "DELETED"}
@@ -237,6 +371,13 @@ class RegistrationRepository:
                 {"snapshot.product.serial_normalized": {"$regex": escaped, "$options": "i"}},
                 {"snapshot.product.components.serial_normalized": {"$regex": escaped, "$options": "i"}},
             ]
+            normalized_serial = normalize_serial(term)
+            if normalized_serial and normalized_serial != term:
+                normalized_escaped = re.escape(normalized_serial)
+                search_clauses.extend([
+                    {"snapshot.product.serial_normalized": {"$regex": normalized_escaped, "$options": "i"}},
+                    {"snapshot.product.components.serial_normalized": {"$regex": normalized_escaped, "$options": "i"}},
+                ])
             digits = re.sub(r"\D+", "", term)
             if digits:
                 search_clauses.append({"snapshot.customer.mobile_normalized": {"$regex": re.escape(digits)}})
@@ -277,6 +418,11 @@ class RegistrationRepository:
         serialized = self._serialize_value(row)
         if isinstance(serialized, dict):
             serialized["_id"] = str(row.get("_id"))
+            purchase = serialized.get("purchase")
+            if isinstance(purchase, dict):
+                legacy_warranty_date = purchase.pop("warranty_expiry_date", None)
+                if not purchase.get("replacement_warranty_expiry_date") and legacy_warranty_date:
+                    purchase["replacement_warranty_expiry_date"] = legacy_warranty_date
             bill_asset = serialized.get("bill_asset")
             if isinstance(bill_asset, dict):
                 bill_asset.pop("data_base64", None)
@@ -321,7 +467,10 @@ class RegistrationRepository:
             "invoice_number": purchase.get("invoice_number"),
             "dealer_name": purchase.get("dealer_name"),
             "purchase_date": self._serialize_value(purchase.get("purchase_date")),
-            "warranty_expiry_date": self._serialize_value(purchase.get("warranty_expiry_date")),
+            "replacement_warranty_expiry_date": self._serialize_value(
+                purchase.get("replacement_warranty_expiry_date") or purchase.get("warranty_expiry_date")
+            ),
+            "service_warranty_expiry_date": self._serialize_value(purchase.get("service_warranty_expiry_date")),
             "submitted_at": submitted_at.isoformat() if submitted_at else None,
             "serial_validation_result": (row.get("serial_validation") or {}).get("result"),
             "has_bill": bool(row.get("bill_asset")),

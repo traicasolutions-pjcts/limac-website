@@ -49,7 +49,7 @@ def test_component_serial_helper_falls_back_to_legacy_serial() -> None:
     assert registration_component_serials({"product": {"serial_number": "LEGACY-1"}}) == ["LEGACY-1"]
 
 
-async def test_status_update_serializes_warranty_expiry_date_for_mongo() -> None:
+async def test_status_update_serializes_replacement_and_service_warranty_dates_for_mongo() -> None:
     class FakeCollection:
         def __init__(self) -> None:
             self.update = None
@@ -74,9 +74,13 @@ async def test_status_update_serializes_warranty_expiry_date_for_mongo() -> None
         next_status=RegistrationStatus.APPROVED,
         admin_id="admin-id",
         reason=None,
-        warranty_expiry_date=date(2027, 9, 17),
+        replacement_warranty_expiry_date=date(2027, 9, 17),
+        service_warranty_expiry_date=date(2028, 9, 17),
     )
 
     update = db.warranty_registrations.update
-    assert update["$set"]["purchase.warranty_expiry_date"] == "2027-09-17"
-    assert update["$push"]["decision_history"]["warranty_expiry_date"] == "2027-09-17"
+    assert "purchase.warranty_expiry_date" not in update["$set"]
+    assert update["$set"]["purchase.replacement_warranty_expiry_date"] == "2027-09-17"
+    assert update["$set"]["purchase.service_warranty_expiry_date"] == "2028-09-17"
+    assert update["$push"]["decision_history"]["replacement_warranty_expiry_date"] == "2027-09-17"
+    assert update["$push"]["decision_history"]["service_warranty_expiry_date"] == "2028-09-17"

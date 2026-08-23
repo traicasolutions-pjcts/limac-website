@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Eye, LogOut, RefreshCw, Trash2, X } from 'lucide-react'
+import { Eye, Home, Loader2, LogOut, RefreshCw, Trash2, X } from 'lucide-react'
 import {
   deleteWarrantyRegistration,
   downloadWarrantyBillFile,
   getWarrantyRegistration,
+  updateWarrantyDates,
   updateWarrantyRegistrationStatus,
 } from '@/services/warrantyApi'
 import type { AdminRegistrationDetail, RegistrationStatus } from '@/types/warranty'
@@ -38,10 +39,14 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     url: string
     objectUrl?: string
   } | null>(null)
+  const [openingBill, setOpeningBill] = useState(false)
   const [canDelete, setCanDelete] = useState(false)
   const [statusAction, setStatusAction] = useState<RegistrationStatus | null>(null)
   const [statusReason, setStatusReason] = useState('')
-  const [warrantyExpiryDate, setWarrantyExpiryDate] = useState('')
+  const [replacementWarrantyExpiryDate, setReplacementWarrantyExpiryDate] = useState('')
+  const [serviceWarrantyExpiryDate, setServiceWarrantyExpiryDate] = useState('')
+  const [warrantyDateReason, setWarrantyDateReason] = useState('')
+  const [showWarrantyDatesModal, setShowWarrantyDatesModal] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
@@ -83,8 +88,17 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   function changeStatus(nextStatus: RegistrationStatus) {
     if (!detail || nextStatus === detail.status) return
     setStatusReason('')
-    setWarrantyExpiryDate('')
+    setReplacementWarrantyExpiryDate('')
+    setServiceWarrantyExpiryDate('')
     setStatusAction(nextStatus)
+  }
+
+  function openWarrantyDateEdit() {
+    if (!detail) return
+    setReplacementWarrantyExpiryDate(detail.purchase.replacement_warranty_expiry_date || '')
+    setServiceWarrantyExpiryDate(detail.purchase.service_warranty_expiry_date || '')
+    setWarrantyDateReason('')
+    setShowWarrantyDatesModal(true)
   }
 
   async function confirmStatusChange() {
@@ -99,20 +113,34 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
         return
       }
     }
-    if (statusAction === 'APPROVED' && !warrantyExpiryDate) {
-      setError('Warranty expiry date is required for approval.')
+    if (statusAction === 'APPROVED' && (!replacementWarrantyExpiryDate || !serviceWarrantyExpiryDate)) {
+      setError('Replacement and service warranty expiry dates are required for approval.')
       return
     }
-    if (statusAction === 'APPROVED' && warrantyExpiryDate < detail.purchase.purchase_date) {
-      setError('Warranty expiry date cannot be earlier than purchase date.')
+    if (
+      statusAction === 'APPROVED' &&
+      (
+        replacementWarrantyExpiryDate < detail.purchase.purchase_date ||
+        serviceWarrantyExpiryDate < detail.purchase.purchase_date
+      )
+    ) {
+      setError('Warranty expiry dates cannot be earlier than purchase date.')
       return
     }
     setUpdating(true)
     try {
-      await updateWarrantyRegistrationStatus(token, id, statusAction, reason, warrantyExpiryDate)
+      await updateWarrantyRegistrationStatus(
+        token,
+        id,
+        statusAction,
+        reason,
+        replacementWarrantyExpiryDate,
+        serviceWarrantyExpiryDate
+      )
       setStatusAction(null)
       setStatusReason('')
-      setWarrantyExpiryDate('')
+      setReplacementWarrantyExpiryDate('')
+      setServiceWarrantyExpiryDate('')
       await load()
     } catch (err) {
       setStatusAction(null)
@@ -125,6 +153,8 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
   async function viewBill() {
     const token = getAdminAccessToken()
     if (!token) return logout()
+    setOpeningBill(true)
+    setError(null)
     try {
       const bill = await downloadWarrantyBillFile(token, id)
       const objectUrl = window.URL.createObjectURL(bill.blob)
@@ -137,6 +167,43 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to open bill.')
+    } finally {
+      setOpeningBill(false)
+    }
+  }
+
+  async function saveWarrantyDates() {
+    const token = getAdminAccessToken()
+    if (!token) return logout()
+    if (!detail) return
+    if (!replacementWarrantyExpiryDate || !serviceWarrantyExpiryDate) {
+      setError('Replacement and service warranty expiry dates are required.')
+      return
+    }
+    if (
+      replacementWarrantyExpiryDate < detail.purchase.purchase_date ||
+      serviceWarrantyExpiryDate < detail.purchase.purchase_date
+    ) {
+      setError('Warranty expiry dates cannot be earlier than purchase date.')
+      return
+    }
+    setUpdating(true)
+    setError(null)
+    try {
+      await updateWarrantyDates(
+        token,
+        id,
+        replacementWarrantyExpiryDate,
+        serviceWarrantyExpiryDate,
+        warrantyDateReason.trim() || undefined
+      )
+      setShowWarrantyDatesModal(false)
+      setWarrantyDateReason('')
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update warranty dates.')
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -194,9 +261,12 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/admin/warranty/registrations" className="inline-flex items-center gap-2 text-sm font-semibold text-limac-blue">
-            <ChevronLeft size={16} />
-            Back to registrations
+          <Link
+            href="/admin/warranty/registrations"
+            className="inline-flex items-center gap-2 rounded-lg border border-limac-blue/40 bg-limac-blue/10 px-3 py-2 text-sm font-semibold text-limac-blue hover:border-limac-blue hover:bg-limac-blue/15"
+          >
+            <Home size={16} />
+            Admin home
           </Link>
           <p className="mt-6 text-sm font-semibold uppercase text-limac-green">Registration</p>
           <h1 className="mt-2 text-3xl font-bold text-white">{detail.registration_number}</h1>
@@ -286,12 +356,25 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
         />
         <InfoCard title="Purchase" items={[
           ['Purchase date', detail.purchase.purchase_date],
-          ['Warranty expiry', detail.purchase.warranty_expiry_date || '-'],
+          ['Replacement warranty', detail.purchase.replacement_warranty_expiry_date || '-'],
+          ['Service warranty', detail.purchase.service_warranty_expiry_date || '-'],
           ['Invoice', detail.purchase.invoice_number],
-          ['Dealer/shop', detail.purchase.dealer_name],
+          ['Dealer / Care of', detail.purchase.dealer_name],
           ['Dealer code', detail.purchase.dealer_code || '-'],
         ]} />
       </div>
+
+      {detail.status === 'APPROVED' ? (
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={openWarrantyDateEdit}
+            className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Update warranty dates
+          </button>
+        </div>
+      ) : null}
 
       <div className="mt-6 rounded-lg border border-gray-800 bg-gray-900 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -303,12 +386,12 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
           </div>
           <button
             type="button"
-            disabled={!detail.bill_asset}
+            disabled={!detail.bill_asset || openingBill}
             onClick={viewBill}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-700 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Eye size={16} />
-            View bill
+            {openingBill ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+            {openingBill ? 'Opening bill...' : 'View bill'}
           </button>
         </div>
       </div>
@@ -351,15 +434,22 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
             ) : null}
             {statusAction === 'APPROVED' ? (
               <label className="mt-4 block">
-                <span className="mb-1.5 block text-sm font-semibold text-white">
-                  Warranty expiry date
-                </span>
+                <span className="mb-1.5 block text-sm font-semibold text-white">Replacement warranty expiry date</span>
                 <input
                   required
                   type="date"
                   min={detail.purchase.purchase_date}
-                  value={warrantyExpiryDate}
-                  onChange={(event) => setWarrantyExpiryDate(event.target.value)}
+                  value={replacementWarrantyExpiryDate}
+                  onChange={(event) => setReplacementWarrantyExpiryDate(event.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+                />
+                <span className="mb-1.5 mt-4 block text-sm font-semibold text-white">Service warranty expiry date</span>
+                <input
+                  required
+                  type="date"
+                  min={detail.purchase.purchase_date}
+                  value={serviceWarrantyExpiryDate}
+                  onChange={(event) => setServiceWarrantyExpiryDate(event.target.value)}
                   className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
                 />
               </label>
@@ -379,6 +469,61 @@ export default function AdminRegistrationDetailClient({ id }: { id: string }) {
                 className="rounded-lg bg-limac-green px-4 py-2 text-sm font-semibold text-limac-black disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Update status
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showWarrantyDatesModal ? (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-gray-700 bg-gray-900 p-5 shadow-2xl">
+            <h2 className="text-lg font-bold text-white">Update warranty dates</h2>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-white">Replacement warranty expiry date</span>
+              <input
+                required
+                type="date"
+                min={detail.purchase.purchase_date}
+                value={replacementWarrantyExpiryDate}
+                onChange={(event) => setReplacementWarrantyExpiryDate(event.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-white">Service warranty expiry date</span>
+              <input
+                required
+                type="date"
+                min={detail.purchase.purchase_date}
+                value={serviceWarrantyExpiryDate}
+                onChange={(event) => setServiceWarrantyExpiryDate(event.target.value)}
+                className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+              />
+            </label>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-white">Reason</span>
+              <textarea
+                value={warrantyDateReason}
+                onChange={(event) => setWarrantyDateReason(event.target.value)}
+                className="min-h-20 w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+              />
+            </label>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowWarrantyDatesModal(false)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updating}
+                onClick={saveWarrantyDates}
+                className="rounded-lg bg-limac-green px-4 py-2 text-sm font-semibold text-limac-black disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Save dates
               </button>
             </div>
           </div>

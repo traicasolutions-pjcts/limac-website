@@ -6,7 +6,7 @@ export const metadata: Metadata = {
 
 export default function WarrantySerialImportsPage() {
   return (
-    <section className="min-h-screen bg-limac-black px-4 py-24">
+    <section className="min-h-screen bg-limac-black px-4 pb-24 pt-32">
       <div className="mx-auto max-w-4xl">
         <h1 className="text-3xl font-bold text-white">Serial imports</h1>
         <div className="mt-6 rounded-lg border border-gray-800 bg-gray-900 p-6">

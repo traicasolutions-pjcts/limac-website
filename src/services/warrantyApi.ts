@@ -5,7 +5,10 @@ import type {
   AdminProduct,
   AdminProductCreatePayload,
   AdminRegistrationDetail,
+  AdminRegistrationChangeLogRow,
   AdminRegistrationListResponse,
+  AdminWarrantyFilter,
+  AdminWarrantySummary,
   AdminUser,
   AdminUserCreatePayload,
   SerialValidationResponse,
@@ -61,7 +64,7 @@ function formatValidationErrors(errors: Array<{ loc?: Array<string | number>; ms
     'body.serial_numbers': 'Product serial numbers',
     'body.purchase.purchase_date': 'Purchase date',
     'body.purchase.invoice_number': 'Invoice number',
-    'body.purchase.dealer_name': 'Dealer/shop name',
+    'body.purchase.dealer_name': 'Dealer / Care of',
   }
 
   return errors
@@ -122,10 +125,16 @@ export function loginWarrantyAdmin(payload: AdminLoginPayload) {
   })
 }
 
-export function listWarrantyRegistrations(token: string, status?: string, search?: string) {
+export function listWarrantyRegistrations(
+  token: string,
+  status?: string,
+  search?: string,
+  warrantyFilter?: AdminWarrantyFilter
+) {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
   if (search?.trim()) params.set('search', search.trim())
+  if (warrantyFilter) params.set('warranty_filter', warrantyFilter)
   const query = params.toString() ? `?${params.toString()}` : ''
   return requestJson<AdminRegistrationListResponse>(`/admin/registrations${query}`, {
     headers: {
@@ -138,6 +147,14 @@ export function listWarrantyRegistrations(token: string, status?: string, search
       id: validIdentifier(item.id) || validIdentifier(item._id) || validIdentifier(item.registration_number),
     })),
   }))
+}
+
+export function getWarrantyRegistrationSummary(token: string) {
+  return requestJson<AdminWarrantySummary>('/admin/registrations/summary', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
 }
 
 export function getWarrantyRegistration(token: string, registrationId: string) {
@@ -153,7 +170,8 @@ export function updateWarrantyRegistrationStatus(
   registrationId: string,
   status: string,
   reason?: string,
-  warrantyExpiryDate?: string
+  replacementWarrantyExpiryDate?: string,
+  serviceWarrantyExpiryDate?: string
 ) {
   return requestJson<{ id: string; status: string }>(`/admin/registrations/${registrationId}/status`, {
     method: 'POST',
@@ -163,9 +181,50 @@ export function updateWarrantyRegistrationStatus(
     body: JSON.stringify({
       status,
       reason,
-      warranty_expiry_date: warrantyExpiryDate || undefined,
+      replacement_warranty_expiry_date: replacementWarrantyExpiryDate || undefined,
+      service_warranty_expiry_date: serviceWarrantyExpiryDate || undefined,
     }),
   })
+}
+
+export function updateWarrantyDates(
+  token: string,
+  registrationId: string,
+  replacementWarrantyExpiryDate: string,
+  serviceWarrantyExpiryDate: string,
+  reason?: string
+) {
+  return requestJson<{
+    id: string
+    replacement_warranty_expiry_date: string
+    service_warranty_expiry_date: string
+  }>(`/admin/registrations/${registrationId}/warranty-dates`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      replacement_warranty_expiry_date: replacementWarrantyExpiryDate,
+      service_warranty_expiry_date: serviceWarrantyExpiryDate,
+      reason: reason || undefined,
+    }),
+  })
+}
+
+export function queryWarrantyChangeLog(token: string, search?: string, skip = 0, limit = 10) {
+  const params = new URLSearchParams()
+  if (search?.trim()) params.set('search', search.trim())
+  params.set('skip', String(skip))
+  params.set('limit', String(limit))
+  const query = params.toString() ? `?${params.toString()}` : ''
+  return requestJson<{ items: AdminRegistrationChangeLogRow[]; limit: number; skip: number }>(
+    `/admin/registrations/change-log${query}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
 }
 
 export function deleteWarrantyRegistration(token: string, registrationId: string) {

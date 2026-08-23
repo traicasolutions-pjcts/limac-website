@@ -1,6 +1,6 @@
 # Limac Warranty Platform Design Document
 
-Last updated: 2026-08-15
+Last updated: 2026-08-23
 
 ## 1. Purpose
 
@@ -23,9 +23,9 @@ The public warranty pages are part of the Next.js website, but all warranty busi
 | --- | --- | --- | --- |
 | Public website | Next.js, React, TypeScript, Tailwind | Vercel | Marketing pages, product pages, blog, warranty UI |
 | Warranty frontend | Next.js client components | Vercel/browser | Registration form, status lookup, admin UI |
-| Warranty API | FastAPI, Pydantic, Motor | Render Docker service | Registration, admin auth, product serial database, review actions, serial import, CSV export |
+| Warranty API | FastAPI, Pydantic, Motor | Render Docker service | Registration, admin auth, product serial database, review actions, change log, warranty dashboard, serial import, CSV export |
 | Database | MongoDB | Atlas or local Docker | Warranty records, products, admin users, audit/backup data |
-| Bill storage | Cloudinary authenticated assets | Cloudinary | Secure warranty bill storage and signed access URLs |
+| Bill storage | Cloudinary authenticated assets | Cloudinary | Secure warranty bill storage for backend-proxied image/PDF preview |
 | Captcha | Cloudflare Turnstile | Cloudflare | Public registration bot protection |
 | Domain/DNS | BigRock or DNS provider, Vercel DNS records | DNS | Routes public domain to Vercel |
 | Production deploy workflow | GitHub Actions + Vercel CLI | GitHub Actions | Manual Vercel production deployment |
@@ -67,6 +67,8 @@ flowchart TB
 | `src/app/admin/warranty/registrations/[id]/page.tsx` | Admin registration detail |
 | `src/app/admin/warranty/products/page.tsx` | Product serial database management |
 | `src/app/admin/warranty/users/page.tsx` | Super admin user management |
+| `src/app/admin/warranty/serial-imports/page.tsx` | Serial import admin route |
+| `src/app/(site)/privacy-policy/page.tsx` | Public privacy policy, including warranty registration data section |
 | `src/components/warranty/` | Warranty frontend components |
 | `src/services/warrantyApi.ts` | Browser API client for FastAPI |
 | `src/types/warranty.ts` | Frontend warranty contracts |
@@ -95,20 +97,22 @@ Available in current version:
   - PIN code
   - Mobile number
 - Required product/purchase fields:
-  - Product serial number
+  - One or more product/component serial numbers
   - Purchase date
   - Invoice number
-  - Dealer/shop name
+  - Dealer / Care of
 - Optional fields:
   - Product model
   - Dealer code
+- Dealer / Care of and purchase fields include helper hints in the UI.
 - Customer must accept warranty terms and privacy policy.
+- Privacy policy consent links to the public `/privacy-policy` page.
 - Cloudflare Turnstile token is required when `TURNSTILE_REQUIRED=true`.
-- Backend checks the product serial against the Limac product database for duplicate/open-request protection.
-- If the serial is missing from the product database, registration is allowed and held for manual review.
-- If the serial exists with `AVAILABLE`, registration is allowed and the product is moved to `REGISTRATION_PENDING`.
-- If the serial exists with `REGISTRATION_PENDING`, registration is blocked because a request is already open.
-- If the serial exists with `REGISTERED`, registration is blocked because warranty is already assigned.
+- Backend checks all submitted component serials against the Limac product database for duplicate/open-request protection.
+- If a serial is missing from the product database, registration is allowed and held for manual review.
+- If all matching serials exist with `AVAILABLE`, registration is allowed and matching products are moved to `REGISTRATION_PENDING`.
+- If any serial exists with `REGISTRATION_PENDING`, registration is blocked because a request is already open.
+- If any serial exists with `REGISTERED`, registration is blocked because warranty is already assigned.
 - Backend creates a pending registration with a generated reference number.
 - Customer uploads bill/invoice document after registration.
 - Supported bill file types:
@@ -166,7 +170,7 @@ Planned future version:
 - Refresh token rotation from the frontend.
 - Password change flow for the current admin user.
 - Admin disable/reactivate flow.
-- Audit trail UI for admin activity.
+- Global audit trail UI for admin activity beyond the current per-registration change log.
 - Multi-factor authentication.
 
 ### 5.4 Admin Registration Review
@@ -176,19 +180,31 @@ Available in current version:
 - Admins can list warranty registrations.
 - Queue supports filtering by status.
 - Queue supports searching by customer name, mobile number, registration number, and serial.
+- Queue includes four warranty dashboard tiles visible to all admin users:
+  - Replacement warranty expired
+  - Service warranty expired
+  - Replacement warranty under warranty
+  - Service warranty under warranty
+- Clicking a warranty dashboard tile loads matching approved records and sorts by the relevant warranty expiry date.
 - Admins can open detail views.
-- Admins can view uploaded bills through short-lived signed Cloudinary URLs.
+- Admins can view uploaded bills through the backend bill-file proxy. The UI supports image and PDF preview, shows a loading indicator while Cloudinary data is fetched, and offers opening PDFs in a new tab from a browser blob URL.
 - Admin registration detail performs a fresh current lookup against the Limac product database, rather than relying only on the original registration snapshot.
 - Admins can update registration status.
-- Approval requires the serial to exist in the Limac product database and not already be `REGISTERED` for a different warranty.
-- Approval changes the product status to `REGISTERED`.
-- Rejection, cancellation, or deletion releases a matching `REGISTRATION_PENDING` product back to `AVAILABLE`.
+- Approval requires every submitted component serial to exist in the Limac product database and not already be `REGISTERED` for a different warranty.
+- Approval requires both `replacement_warranty_expiry_date` and `service_warranty_expiry_date`.
+- Replacement and service warranty expiry dates cannot be earlier than the purchase date.
+- Approval changes all matching component product statuses to `REGISTERED`.
+- Admins/approvers can update replacement and service warranty dates later for approved records.
+- Warranty date changes are appended to each registration's decision history.
+- Rejection, cancellation, or deletion releases matching `REGISTRATION_PENDING` products back to `AVAILABLE`.
 - Reason is required for:
   - `REJECTED`
   - `MORE_INFORMATION_REQUIRED`
 - Super admins can delete registrations.
 - Deleted registrations are removed from the live dashboard but preserved in backup snapshots.
 - CSV export includes live records and deleted backup snapshots. Deleted exported rows are marked with `status=DELETED`.
+- CSV export includes `replacement_warranty_expiry_date` and `service_warranty_expiry_date`; the legacy `warranty_expiry_date` column is no longer exported.
+- Change log query is available from the admin registration page with pagination. It searches by serial number, mobile number, customer name, and registration reference, and returns only change-log entries rather than loading the full registration table.
 
 Current statuses:
 
@@ -274,6 +290,26 @@ Planned future version:
 - Notification provider integration.
 - Sentry or equivalent production error monitoring.
 
+### 5.8 Current Warranty Pages
+
+Public pages:
+
+- `/warranty/register`: customer warranty registration, multiple component serial entry, bill upload handoff, warranty/privacy consent.
+- `/warranty/status`: customer status lookup by reference plus mobile or serial.
+- `/warranty/submitted`: submission acknowledgement.
+- `/privacy-policy`: public privacy policy with a warranty registration data section.
+
+Admin pages:
+
+- `/admin/warranty/login`: admin login.
+- `/admin/warranty/registrations`: admin home/dashboard, status filters, warranty summary tiles, search, change-log query, CSV export, bill preview, and registration actions.
+- `/admin/warranty/registrations/[id]`: registration detail, status changes, bill preview, warranty date updates, decision history, and deletion for authorized users.
+- `/admin/warranty/products`: product serial database management.
+- `/admin/warranty/users`: super-admin user creation and password reset.
+- `/admin/warranty/serial-imports`: serial import route for future/import workflow.
+
+Admin subpages include a clear `Admin home` action that returns to `/admin/warranty/registrations`.
+
 ## 6. Data Flow
 
 ### Public Registration Flow
@@ -294,11 +330,11 @@ sequenceDiagram
   N->>A: POST /api/v1/public/warranty-registrations
   A->>T: Verify token through siteverify
   T-->>A: Verification result
-  A->>M: Check product serial status
-  alt Product missing or AVAILABLE
+  A->>M: Check submitted component serial statuses
+  alt Serials missing or AVAILABLE
     A->>M: Insert warranty_registrations document
-    A->>M: Move matching product to REGISTRATION_PENDING when present
-  else Product REGISTRATION_PENDING or REGISTERED
+    A->>M: Move matching products to REGISTRATION_PENDING when present
+  else Any serial REGISTRATION_PENDING or REGISTERED
     A-->>N: 422 duplicate/open request error
   end
   M-->>A: Registration number
@@ -330,14 +366,14 @@ sequenceDiagram
   API->>DB: Query warranty_registrations
   API-->>UI: Registration rows
   Admin->>UI: View bill
-  UI->>API: GET /api/v1/admin/registrations/{id}/bill-access
-  API->>CL: Build signed authenticated URL
-  API-->>UI: Signed URL valid for about 5 minutes
-  Admin->>UI: Approve registration
+  UI->>API: GET /api/v1/admin/registrations/{id}/bill-file
+  API->>CL: Download authenticated asset bytes
+  API-->>UI: Inline file bytes for image/PDF blob preview
+  Admin->>UI: Approve registration with replacement and service dates
   UI->>API: POST /api/v1/admin/registrations/{id}/status APPROVED
-  API->>DB: Check product status
-  alt Product AVAILABLE or matching REGISTRATION_PENDING
-    API->>DB: Update registration and mark product REGISTERED
+  API->>DB: Check all component product statuses
+  alt Products AVAILABLE or matching REGISTRATION_PENDING
+    API->>DB: Update registration, append decision_history, mark products REGISTERED
     API-->>UI: Approved
   else Product missing or already REGISTERED
     API-->>UI: 422 approval error
@@ -374,7 +410,6 @@ erDiagram
     string registration_number
     object customer
     object product
-    string serial_normalized
     object purchase
     object bill_asset
     string status
@@ -450,7 +485,7 @@ erDiagram
   PRODUCTS ||--o{ WARRANTY_REGISTRATIONS : "serial status gate"
   WARRANTY_REGISTRATIONS ||--o{ WARRANTY_REGISTRATION_BACKUPS : "snapshotted as"
   WARRANTY_REGISTRATIONS ||--o| WARRANTIES : "future certificate/record"
-  ADMIN_USERS ||--o{ WARRANTY_REGISTRATIONS : "reviews"
+  ADMIN_USERS ||--o{ WARRANTY_REGISTRATIONS : "reviews and warranty edits"
   ADMIN_USERS ||--o{ WARRANTY_REGISTRATION_BACKUPS : "deletes"
 ```
 
@@ -459,7 +494,7 @@ erDiagram
 | Collection | Important Indexes | Purpose |
 | --- | --- | --- |
 | `products` | Unique `serial_normalized`; `status, updated_at`; `source_system, source_record_id` | Limac product database for manual entry, imports, duplicate request blocking, and approval checks |
-| `warranty_registrations` | Unique `registration_number`; `status, submitted_at`; `serial_normalized, submitted_at`; `purchase.invoice_number`; `anti_abuse.idempotency_hash` | Live registration queue |
+| `warranty_registrations` | Unique `registration_number`; `status, submitted_at`; `serial_normalized, submitted_at`; `product.components.serial_normalized, submitted_at`; `purchase.invoice_number`; `anti_abuse.idempotency_hash` | Live registration queue, component serial lookup, review dashboard, and change log |
 | `warranty_registration_backups` | `registration_number, created_at`; `action, created_at`; `created_at` | Snapshot history and deleted export recovery |
 | `warranties` | Unique `warranty_number`; unique `serial_normalized`; `status, created_at` | Future approved warranty records |
 | `admin_users` | Unique `email_normalized`; `role, disabled_at` | Admin authentication and authorization |
@@ -484,6 +519,32 @@ The `products` collection is the Limac product serial database used by manual en
 | `source_record_id` | Source-side stable identifier when available |
 | `source_updated_at` | Timestamp from source system when available |
 | `sync_version` | Incremented when imported/synced data changes |
+
+### Warranty Registration Fields
+
+The `warranty_registrations` collection stores the live registration queue and the per-registration audit trail used by admin review.
+
+| Field | Purpose |
+| --- | --- |
+| `registration_number` | Human-readable reference such as `LIMAC-REG-2026-000012` |
+| `customer` | Name, address, city, state, PIN code, mobile number, and normalized mobile |
+| `product.serial_number` | Legacy/primary serial value, currently the first submitted component serial |
+| `product.serial_normalized` | Normalized primary serial used by older queries and compatibility paths |
+| `product.components[]` | Current multi-component serial model. Each component stores `serial_number` and `serial_normalized` |
+| `purchase.purchase_date` | Customer-entered purchase date |
+| `purchase.invoice_number` | Customer-entered invoice number |
+| `purchase.dealer_name` | Dealer / Care of value |
+| `purchase.dealer_code` | Optional dealer code |
+| `purchase.replacement_warranty_expiry_date` | Admin-entered replacement warranty expiry date for approved records |
+| `purchase.service_warranty_expiry_date` | Admin-entered service warranty expiry date for approved records |
+| `bill_asset` | Cloudinary asset metadata for image/PDF bill files; MongoDB does not store the bill bytes |
+| `status` | Current registration status |
+| `decision_history[]` | Per-registration change log, including registration received, status updates, approvals, reasons, admin IDs, and warranty date edits |
+| `serial_validation` | Snapshot of serial validation result at registration time, including component-level results |
+| `consent` | Warranty terms and privacy policy consent flags and versions |
+| `anti_abuse` | Idempotency hash and request metadata |
+
+Legacy note: older documents may contain `purchase.warranty_expiry_date`. Current code no longer writes or exports that field. Read paths normalize it into `purchase.replacement_warranty_expiry_date` when needed, and `backend/scripts/backfill_replacement_warranty_dates.py` can backfill old records that contain only the legacy field.
 
 ### Backup and Deleted Export Design
 
@@ -512,11 +573,12 @@ stateDiagram-v2
 
 Rules:
 
-- Missing product records do not block customer registration.
+- Missing product records do not block customer registration, but they block final approval until the serial is added to the product database.
 - Existing `AVAILABLE` records allow registration and are reserved as `REGISTRATION_PENDING`.
 - Existing `REGISTRATION_PENDING` records block new registration for the same normalized serial.
 - Existing `REGISTERED` records block new registration and approval for the same normalized serial.
-- Serial matching is case-insensitive and ignores whitespace because serials are stored and queried with `serial_normalized`.
+- For registrations with multiple component serials, reservation, approval, and release checks run for each component.
+- Serial matching is case-insensitive and ignores whitespace because serials are stored and queried with normalized serial fields.
 
 ## 8. API Design
 
@@ -540,11 +602,15 @@ Base prefix: `/api/v1/admin`
 | `POST` | `/auth/login` | Active admin | Login |
 | `POST` | `/auth/refresh` | Refresh token | Refresh token placeholder/flow |
 | `GET` | `/registrations` | Admin | List registration queue |
+| `GET` | `/registrations/summary` | Admin | Warranty dashboard counts for replacement/service expired and under-warranty records |
+| `GET` | `/registrations/change-log` | Admin | Paginated registration change-log query |
 | `GET` | `/registrations/export.csv` | Super admin | Export live and deleted records |
 | `GET` | `/registrations/{id}` | Admin | Registration detail |
 | `POST` | `/registrations/{id}/status` | Admin | Update status |
+| `POST` | `/registrations/{id}/warranty-dates` | Admin | Update replacement and service warranty dates for approved records |
 | `DELETE` | `/registrations/{id}` | Super admin | Delete registration with backup |
 | `GET` | `/registrations/{id}/bill-access` | Admin | Get signed bill URL |
+| `GET` | `/registrations/{id}/bill-file` | Admin | Download authenticated bill bytes through backend for image/PDF preview |
 | `GET` | `/products` | Approver or super admin | List/search product serials |
 | `POST` | `/products` | Approver or super admin | Add or update product serial |
 | `DELETE` | `/products/{id}` | Super admin | Delete product serial |
@@ -552,6 +618,15 @@ Base prefix: `/api/v1/admin`
 | `GET` | `/users` | Super admin | List admin users |
 | `POST` | `/users` | Super admin | Create admin user |
 | `POST` | `/users/{id}/password` | Super admin | Reset another user's password |
+
+Admin API notes:
+
+- `GET /registrations` supports `status`, `search`, `limit`, `skip`, and `warranty_filter`.
+- Supported `warranty_filter` values are `replacement_expired`, `service_expired`, `replacement_under_warranty`, and `service_under_warranty`.
+- Warranty-filtered lists include approved records only and are sorted by the relevant replacement or service warranty date.
+- `POST /registrations/{id}/status` requires `replacement_warranty_expiry_date` and `service_warranty_expiry_date` when `status=APPROVED`.
+- `POST /registrations/{id}/warranty-dates` is available to admin users for approved records and appends a `WARRANTY_DATES_UPDATED` event to `decision_history`.
+- `GET /registrations/change-log` supports `search`, `limit`, and `skip` and returns paginated rows with `decision_history`.
 
 ## 9. Security Design
 
@@ -578,7 +653,9 @@ Base prefix: `/api/v1/admin`
 - Bills are not stored directly in MongoDB.
 - Bills are uploaded to Cloudinary as authenticated assets.
 - MongoDB stores only asset metadata such as public ID, resource type, checksum, size, folder, and content type.
-- Admin bill viewing uses signed URLs that expire after about 5 minutes.
+- Admin bill viewing primarily uses the backend `/bill-file` endpoint, which downloads the authenticated Cloudinary asset server-side and returns inline bytes to the browser.
+- The admin frontend builds browser blob URLs from the returned bytes for image/PDF preview and shows a loading state while the file is being fetched.
+- A signed Cloudinary access helper remains available for provider-level access patterns, but the UI uses the backend proxy to avoid browser-side authenticated raw URL failures.
 
 ### CORS
 
@@ -809,23 +886,34 @@ Available now:
 
 - Public website on Next.js.
 - Public warranty registration page.
+- Multi-component serial entry for one invoice/product during warranty registration.
+- Dealer / Care of field label with registration-form hints.
+- Privacy policy page and public registration consent link.
 - Cloudflare Turnstile integration.
 - Public warranty status lookup.
-- Cloudinary bill upload and signed admin bill preview.
+- Cloudinary bill upload and admin image/PDF bill preview through backend bill-file proxy.
 - FastAPI warranty backend.
 - MongoDB indexes and repository layer.
 - Admin login.
 - Admin registration queue and detail views.
+- Admin home navigation from admin subpages and registration dashboard reset.
+- Admin warranty dashboard tiles for replacement/service expired and under-warranty counts.
+- Warranty tile filters that load matching approved records sorted by warranty date.
+- Paginated change-log query from the admin registration page.
 - Admin status update.
+- Manual replacement and service warranty expiry dates during approval.
+- Future warranty date update flow for approved records.
+- Per-registration decision history including registration received, status changes, approvals, and warranty date edits.
 - Product serial database page for manual entry and search.
 - Product serial duplicate/open-request validation during public registration.
-- Approval check that prevents reusing already assigned serials.
+- Approval check that prevents reusing already assigned serials across all submitted component serials.
 - Product status transitions between `AVAILABLE`, `REGISTRATION_PENDING`, and `REGISTERED`.
 - Super-admin-only product serial deletion.
 - Super admin delete with backup snapshot.
-- CSV export including deleted backups as `DELETED`.
+- CSV export including deleted backups as `DELETED`, with replacement and service warranty date fields.
 - Super admin user creation and password reset.
 - Serial import upload and dry-run.
+- Legacy warranty date backfill helper at `backend/scripts/backfill_replacement_warranty_dates.py`.
 - Render Docker deployment config.
 - Manual Vercel production deployment workflow.
 
@@ -837,6 +925,7 @@ Known current limitations:
 - Serial import job lookup endpoint is not persisted yet.
 - No warranty notification provider is implemented in V1.
 - Tally integration is a scaffold, not an active production sync.
+- Approved legacy registrations that never stored replacement/service warranty dates must be updated manually; the backfill script can only migrate rows that contain the old `purchase.warranty_expiry_date` value.
 
 ## 13. Future Version Roadmap
 
@@ -847,7 +936,7 @@ Known current limitations:
 - Add frontend end-to-end tests for public registration and admin review.
 - Improve admin session refresh behavior.
 - Add admin disable/reactivate.
-- Add audit log writes for admin actions.
+- Add global `audit_logs` writes for admin actions beyond per-registration `decision_history`.
 
 ### V2 Approval and Warranty Issuance
 

@@ -175,7 +175,7 @@ export default function WarrantyRegisterClient() {
     if (hasDuplicateSerials(enteredSerialNumbers())) return 'Product or component serial numbers must be unique.'
     if (form.purchaseDate && form.purchaseDate > today) return 'Purchase date cannot be greater than today.'
     if (form.invoiceNumber.trim().length < 1) return 'Invoice or bill number is required.'
-    if (form.dealerName.trim().length < 2) return 'Dealer or shop name must have at least 2 characters.'
+    if (form.dealerName.trim().length < 2) return 'Dealer / Care of must have at least 2 characters.'
     return null
   }
 
@@ -300,15 +300,15 @@ export default function WarrantyRegisterClient() {
             onChange={(value) => updateField('invoiceNumber', value)}
           />
           <Input
-            label="Dealer or shop name"
+            label="Dealer / Care of"
             required
-            hint="Enter the shop, dealer or seller name from the bill."
+            hint="Enter the dealer, shop, seller, or care-of contact shown on the bill."
             value={form.dealerName}
             onChange={(value) => updateField('dealerName', value)}
           />
           <Input
             label="Dealer code"
-            hint="Optional dealer code, if provided by the seller."
+            hint="Optional dealer or care-of code, if provided by the seller."
             value={form.dealerCode}
             onChange={(value) => updateField('dealerCode', value)}
           />

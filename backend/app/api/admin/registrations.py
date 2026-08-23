@@ -30,25 +30,80 @@ router = APIRouter(prefix="/registrations", tags=["admin-registrations"])
 class StatusUpdateRequest(BaseModel):
     status: RegistrationStatus
     reason: str | None = None
-    warranty_expiry_date: date | None = None
+    replacement_warranty_expiry_date: date | None = None
+    service_warranty_expiry_date: date | None = None
+
+
+class WarrantyDatesUpdateRequest(BaseModel):
+    replacement_warranty_expiry_date: date
+    service_warranty_expiry_date: date
+    reason: str | None = None
 
 
 @router.get("")
 async def list_registrations(
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
+    warranty_filter: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
     skip: int = Query(default=0, ge=0),
     db: AsyncIOMotorDatabase = Depends(db_dependency),
     _: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, object]:
+    if warranty_filter and warranty_filter not in {
+        "replacement_expired",
+        "service_expired",
+        "replacement_under_warranty",
+        "service_under_warranty",
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported warranty filter.",
+        )
     rows = await RegistrationRepository(db).list_for_admin(
         status=status_filter,
         search=search,
+        warranty_filter=warranty_filter,
         limit=limit,
         skip=skip,
     )
     return {"items": rows, "limit": limit, "skip": skip}
+
+
+@router.get("/summary")
+async def registration_summary(
+    db: AsyncIOMotorDatabase = Depends(db_dependency),
+    _: dict[str, Any] = Depends(require_admin),
+) -> dict[str, int]:
+    return await RegistrationRepository(db).warranty_summary()
+
+
+@router.get("/change-log")
+async def registration_change_log(
+    search: str | None = Query(default=None, min_length=1),
+    limit: int = Query(default=10, ge=1, le=50),
+    skip: int = Query(default=0, ge=0),
+    db: AsyncIOMotorDatabase = Depends(db_dependency),
+    _: dict[str, Any] = Depends(require_admin),
+) -> dict[str, object]:
+    rows = await RegistrationRepository(db).list_for_admin(search=search, limit=limit, skip=skip)
+    documents = []
+    repository = RegistrationRepository(db)
+    for row in rows:
+        document = await repository.get_by_id(str(row.get("id") or row.get("registration_number")))
+        if not document:
+            continue
+        detail = repository.serialize_admin_detail(document)
+        documents.append({
+            "registration_number": detail.get("registration_number"),
+            "status": detail.get("status"),
+            "customer_name": (detail.get("customer") or {}).get("name"),
+            "mobile_number": (detail.get("customer") or {}).get("mobile_number"),
+            "serial_numbers": registration_component_serials(detail),
+            "decision_history": detail.get("decision_history") or [],
+            "submitted_at": detail.get("submitted_at"),
+        })
+    return {"items": documents, "limit": limit, "skip": skip}
 
 
 @router.get("/export.csv")
@@ -136,10 +191,14 @@ async def update_registration_status(
         RegistrationStatus.MORE_INFORMATION_REQUIRED,
     } and not payload.reason:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Reason is required.")
-    if payload.status == RegistrationStatus.APPROVED and not payload.warranty_expiry_date:
+    replacement_warranty_expiry_date = payload.replacement_warranty_expiry_date
+    service_warranty_expiry_date = payload.service_warranty_expiry_date
+    if payload.status == RegistrationStatus.APPROVED and (
+        not replacement_warranty_expiry_date or not service_warranty_expiry_date
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Warranty expiry date is required for approval.",
+            detail="Replacement and service warranty expiry dates are required for approval.",
         )
     repository = RegistrationRepository(db)
     product_repository = ProductRepository(db)
@@ -150,10 +209,16 @@ async def update_registration_status(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
         serial_numbers = registration_component_serials(registration)
         purchase_date = _coerce_date((registration.get("purchase") or {}).get("purchase_date"))
-        if isinstance(purchase_date, date) and payload.warranty_expiry_date < purchase_date:
+        if (
+            isinstance(purchase_date, date)
+            and (
+                replacement_warranty_expiry_date < purchase_date
+                or service_warranty_expiry_date < purchase_date
+            )
+        ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Warranty expiry date cannot be earlier than purchase date.",
+                detail="Warranty expiry dates cannot be earlier than purchase date.",
             )
         products = []
         missing_serials = []
@@ -201,7 +266,8 @@ async def update_registration_status(
         next_status=payload.status,
         admin_id=str(admin["_id"]),
         reason=payload.reason,
-        warranty_expiry_date=payload.warranty_expiry_date,
+        replacement_warranty_expiry_date=replacement_warranty_expiry_date,
+        service_warranty_expiry_date=service_warranty_expiry_date,
     )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
@@ -220,6 +286,51 @@ async def update_registration_status(
     if payload.status in {RegistrationStatus.REJECTED, RegistrationStatus.CANCELLED}:
         await release_registration_components(product_repository, updated)
     return {"id": registration_id, "status": updated["status"]}
+
+
+@router.post("/{registration_id}/warranty-dates")
+async def update_warranty_dates(
+    registration_id: str,
+    payload: WarrantyDatesUpdateRequest,
+    db: AsyncIOMotorDatabase = Depends(db_dependency),
+    admin: dict[str, Any] = Depends(require_admin),
+) -> dict[str, Any]:
+    repository = RegistrationRepository(db)
+    registration = await repository.get_by_id(registration_id)
+    if not registration:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+    if registration.get("status") != RegistrationStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Warranty dates can be updated only for approved registrations.",
+        )
+    purchase_date = _coerce_date((registration.get("purchase") or {}).get("purchase_date"))
+    if isinstance(purchase_date, date) and (
+        payload.replacement_warranty_expiry_date < purchase_date
+        or payload.service_warranty_expiry_date < purchase_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Warranty expiry dates cannot be earlier than purchase date.",
+        )
+    updated = await repository.update_warranty_dates(
+        registration_id=registration_id,
+        admin_id=str(admin["_id"]),
+        replacement_warranty_expiry_date=payload.replacement_warranty_expiry_date,
+        service_warranty_expiry_date=payload.service_warranty_expiry_date,
+        reason=payload.reason,
+    )
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found.")
+    return {
+        "id": registration_id,
+        "replacement_warranty_expiry_date": (
+            updated.get("purchase") or {}
+        ).get("replacement_warranty_expiry_date"),
+        "service_warranty_expiry_date": (
+            updated.get("purchase") or {}
+        ).get("service_warranty_expiry_date"),
+    }
 
 
 @router.delete("/{registration_id}")
@@ -329,7 +440,8 @@ CSV_EXPORT_FIELDS = [
     "serial_validation_result",
     "serial_validation_normalized",
     "purchase_date",
-    "warranty_expiry_date",
+    "replacement_warranty_expiry_date",
+    "service_warranty_expiry_date",
     "invoice_number",
     "dealer_name",
     "dealer_code",
@@ -369,7 +481,10 @@ def _registration_csv_row(row: dict[str, Any]) -> dict[str, str]:
         "serial_validation_result": _csv_value(serial_validation.get("result")),
         "serial_validation_normalized": _csv_value(serial_validation.get("serial_normalized")),
         "purchase_date": _csv_value(purchase.get("purchase_date")),
-        "warranty_expiry_date": _csv_value(purchase.get("warranty_expiry_date")),
+        "replacement_warranty_expiry_date": _csv_value(
+            purchase.get("replacement_warranty_expiry_date") or purchase.get("warranty_expiry_date")
+        ),
+        "service_warranty_expiry_date": _csv_value(purchase.get("service_warranty_expiry_date")),
         "invoice_number": _csv_value(purchase.get("invoice_number")),
         "dealer_name": _csv_value(purchase.get("dealer_name")),
         "dealer_code": _csv_value(purchase.get("dealer_code")),

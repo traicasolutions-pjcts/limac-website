@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, Loader2, LogOut, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Home, Loader2, LogOut, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { deleteWarrantyProduct, listWarrantyProducts, upsertWarrantyProduct } from '@/services/warrantyApi'
 import type { AdminProduct } from '@/types/warranty'
 import {
@@ -153,9 +153,12 @@ export default function AdminProductsClient() {
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/admin/warranty/registrations" className="inline-flex items-center gap-2 text-sm font-semibold text-limac-blue">
-            <ChevronLeft size={16} />
-            Back to registrations
+          <Link
+            href="/admin/warranty/registrations"
+            className="inline-flex items-center gap-2 rounded-lg border border-limac-blue/40 bg-limac-blue/10 px-3 py-2 text-sm font-semibold text-limac-blue hover:border-limac-blue hover:bg-limac-blue/15"
+          >
+            <Home size={16} />
+            Admin home
           </Link>
           <h1 className="mt-6 text-3xl font-bold text-white">Product serials</h1>
           <p className="mt-2 text-sm text-limac-muted">

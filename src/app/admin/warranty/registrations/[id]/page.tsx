@@ -13,7 +13,7 @@ export default async function WarrantyRegistrationDetailPage({
   const { id } = await params
 
   return (
-    <section className="min-h-screen bg-limac-black px-4 py-24">
+    <section className="min-h-screen bg-limac-black px-4 pb-24 pt-32">
       <AdminRegistrationDetailClient id={id} />
     </section>
   )

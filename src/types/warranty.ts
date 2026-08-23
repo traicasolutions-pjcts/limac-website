@@ -122,7 +122,8 @@ export interface AdminRegistrationRow {
   invoice_number: string
   dealer_name: string
   purchase_date: string
-  warranty_expiry_date?: string
+  replacement_warranty_expiry_date?: string
+  service_warranty_expiry_date?: string
   submitted_at: string
   serial_validation_result?: SerialValidationResult
   has_bill: boolean
@@ -132,6 +133,19 @@ export interface AdminRegistrationListResponse {
   items: AdminRegistrationRow[]
   limit: number
   skip: number
+}
+
+export type AdminWarrantyFilter =
+  | 'replacement_expired'
+  | 'service_expired'
+  | 'replacement_under_warranty'
+  | 'service_under_warranty'
+
+export interface AdminWarrantySummary {
+  replacement_expired: number
+  service_expired: number
+  replacement_under_warranty: number
+  service_under_warranty: number
 }
 
 export interface AdminBillAccessResponse {
@@ -163,7 +177,8 @@ export interface AdminRegistrationDetail {
   }
   purchase: {
     purchase_date: string
-    warranty_expiry_date?: string
+    replacement_warranty_expiry_date?: string
+    service_warranty_expiry_date?: string
     invoice_number: string
     dealer_name: string
     dealer_code?: string
@@ -189,8 +204,24 @@ export interface AdminRegistrationDetail {
     public_id?: string
   }
   decision_history?: Array<{
+    event_type?: string
     status: RegistrationStatus
+    admin_id?: string
     reason?: string
+    replacement_warranty_expiry_date?: string
+    service_warranty_expiry_date?: string
+    previous?: Record<string, string | null | undefined>
+    updated?: Record<string, string | null | undefined>
     created_at: string
   }>
+}
+
+export interface AdminRegistrationChangeLogRow {
+  registration_number: string
+  status: RegistrationStatus
+  customer_name?: string
+  mobile_number?: string
+  serial_numbers: string[]
+  submitted_at?: string
+  decision_history: AdminRegistrationDetail['decision_history']
 }

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from app.api.admin.registrations import CSV_EXPORT_FIELDS, _registration_csv_row
 from app.repositories.registrations import RegistrationRepository
 
 
@@ -75,3 +76,20 @@ async def test_deleted_export_status_reads_only_deleted_backups() -> None:
     assert [row["registration_number"] for row in rows] == ["DELETED"]
     assert db.warranty_registrations.queries == []
     assert db.warranty_registration_backups.queries == [{"action": "DELETED"}]
+
+
+def test_csv_export_uses_replacement_and_service_warranty_columns() -> None:
+    row = _registration_csv_row(
+        {
+            "registration_number": "LIMAC-REG-2026-000003",
+            "purchase": {
+                "warranty_expiry_date": "2027-09-17",
+                "service_warranty_expiry_date": "2028-09-17",
+            },
+        }
+    )
+
+    assert "warranty_expiry_date" not in CSV_EXPORT_FIELDS
+    assert "warranty_expiry_date" not in row
+    assert row["replacement_warranty_expiry_date"] == "2027-09-17"
+    assert row["service_warranty_expiry_date"] == "2028-09-17"

@@ -2,15 +2,23 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Download, Eye, LogOut, PackagePlus, RefreshCw, Search, Trash2, UserPlus, X } from 'lucide-react'
+import { Download, Eye, Home, Loader2, LogOut, PackagePlus, RefreshCw, Search, ShieldCheck, Trash2, UserPlus, Wrench, X } from 'lucide-react'
 import {
   deleteWarrantyRegistration,
   downloadWarrantyBillFile,
   downloadWarrantyRegistrationsCsv,
+  getWarrantyRegistrationSummary,
   listWarrantyRegistrations,
+  queryWarrantyChangeLog,
   updateWarrantyRegistrationStatus,
 } from '@/services/warrantyApi'
-import type { AdminRegistrationRow, RegistrationStatus } from '@/types/warranty'
+import type {
+  AdminRegistrationChangeLogRow,
+  AdminRegistrationRow,
+  AdminWarrantyFilter,
+  AdminWarrantySummary,
+  RegistrationStatus,
+} from '@/types/warranty'
 import {
   clearAdminSession,
   getAdminAccessToken,
@@ -31,6 +39,45 @@ const filters: Array<{ label: string; value?: RegistrationStatus }> = [
 const headerButtonClass =
   'inline-flex items-center gap-2 rounded-lg border border-limac-blue/40 bg-limac-blue/10 px-3 py-2 text-sm font-semibold text-limac-blue hover:border-limac-blue hover:bg-limac-blue/15 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-100 dark:hover:border-sky-300/60 dark:hover:bg-sky-400/15'
 
+const CHANGE_LOG_PAGE_SIZE = 5
+
+const warrantyTiles: Array<{
+  label: string
+  filter: AdminWarrantyFilter
+  valueKey: keyof AdminWarrantySummary
+  tone: 'danger' | 'ok'
+  Icon: typeof ShieldCheck
+}> = [
+  {
+    label: 'Replacement expired',
+    filter: 'replacement_expired',
+    valueKey: 'replacement_expired',
+    tone: 'danger',
+    Icon: ShieldCheck,
+  },
+  {
+    label: 'Service expired',
+    filter: 'service_expired',
+    valueKey: 'service_expired',
+    tone: 'danger',
+    Icon: Wrench,
+  },
+  {
+    label: 'Replacement under warranty',
+    filter: 'replacement_under_warranty',
+    valueKey: 'replacement_under_warranty',
+    tone: 'ok',
+    Icon: ShieldCheck,
+  },
+  {
+    label: 'Service under warranty',
+    filter: 'service_under_warranty',
+    valueKey: 'service_under_warranty',
+    tone: 'ok',
+    Icon: Wrench,
+  },
+]
+
 export default function AdminRegistrationsClient() {
   const [rows, setRows] = useState<AdminRegistrationRow[]>([])
   const [status, setStatus] = useState<RegistrationStatus | undefined>('PENDING')
@@ -39,6 +86,7 @@ export default function AdminRegistrationsClient() {
   const [loading, setLoading] = useState(true)
   const [authorized, setAuthorized] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [openingBillId, setOpeningBillId] = useState<string | null>(null)
   const [billPreview, setBillPreview] = useState<{
     filename: string
     contentType: string
@@ -51,9 +99,17 @@ export default function AdminRegistrationsClient() {
     nextStatus: RegistrationStatus
   } | null>(null)
   const [statusReason, setStatusReason] = useState('')
-  const [warrantyExpiryDate, setWarrantyExpiryDate] = useState('')
+  const [replacementWarrantyExpiryDate, setReplacementWarrantyExpiryDate] = useState('')
+  const [serviceWarrantyExpiryDate, setServiceWarrantyExpiryDate] = useState('')
   const [deleteAction, setDeleteAction] = useState<AdminRegistrationRow | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [changeLogRows, setChangeLogRows] = useState<AdminRegistrationChangeLogRow[]>([])
+  const [changeLogLoading, setChangeLogLoading] = useState(false)
+  const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const [changeLogSkip, setChangeLogSkip] = useState(0)
+  const [warrantySummary, setWarrantySummary] = useState<AdminWarrantySummary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [selectedWarrantyFilter, setSelectedWarrantyFilter] = useState<AdminWarrantyFilter | undefined>()
 
   const visibleRows = useMemo(() => rows, [rows])
 
@@ -62,7 +118,11 @@ export default function AdminRegistrationsClient() {
     window.location.href = '/admin/warranty/login'
   }
 
-  async function load(nextStatus = status, nextSearch = search) {
+  async function load(
+    nextStatus = status,
+    nextSearch = search,
+    nextWarrantyFilter = selectedWarrantyFilter
+  ) {
     const token = getAdminAccessToken()
     if (!token || isAdminSessionExpired()) {
       setAuthorized(false)
@@ -73,7 +133,7 @@ export default function AdminRegistrationsClient() {
     setLoading(true)
     setError(null)
     try {
-      const result = await listWarrantyRegistrations(token, nextStatus, nextSearch)
+      const result = await listWarrantyRegistrations(token, nextStatus, nextSearch, nextWarrantyFilter)
       setRows(result.items)
       setCanManageUsers(isSuperAdmin())
       setAuthorized(true)
@@ -91,8 +151,22 @@ export default function AdminRegistrationsClient() {
     }
   }
 
+  async function loadSummary() {
+    const token = getAdminAccessToken()
+    if (!token || isAdminSessionExpired()) return
+    setSummaryLoading(true)
+    try {
+      setWarrantySummary(await getWarrantyRegistrationSummary(token))
+    } catch {
+      setWarrantySummary(null)
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
   useEffect(() => {
     load()
+    loadSummary()
     const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart']
     const markActive = () => touchAdminSession()
     activityEvents.forEach((eventName) => window.addEventListener(eventName, markActive, { passive: true }))
@@ -115,19 +189,43 @@ export default function AdminRegistrationsClient() {
   }
 
   function selectFilter(nextStatus?: RegistrationStatus) {
+    setChangeLogOpen(false)
+    setChangeLogRows([])
+    setSelectedWarrantyFilter(undefined)
     setStatus(nextStatus)
-    load(nextStatus, search)
+    load(nextStatus, search, undefined)
+  }
+
+  function selectWarrantyTile(nextFilter: AdminWarrantyFilter) {
+    setChangeLogOpen(false)
+    setChangeLogRows([])
+    setSelectedWarrantyFilter(nextFilter)
+    setStatus(undefined)
+    load(undefined, search, nextFilter)
+  }
+
+  function goAdminHome() {
+    setSearch('')
+    setChangeLogOpen(false)
+    setChangeLogRows([])
+    setChangeLogSkip(0)
+    setSelectedWarrantyFilter(undefined)
+    setStatus('PENDING')
+    load('PENDING', '', undefined)
   }
 
   function submitSearch(event: FormEvent) {
     event.preventDefault()
-    load(status, search)
+    setChangeLogOpen(false)
+    setChangeLogRows([])
+    load(status, search, selectedWarrantyFilter)
   }
 
   function changeStatus(row: AdminRegistrationRow, nextStatus: RegistrationStatus) {
     if (nextStatus === row.status) return
     setStatusReason('')
-    setWarrantyExpiryDate('')
+    setReplacementWarrantyExpiryDate('')
+    setServiceWarrantyExpiryDate('')
     setStatusAction({ row, nextStatus })
   }
 
@@ -149,22 +247,34 @@ export default function AdminRegistrationsClient() {
         return
       }
     }
-    if (nextStatus === 'APPROVED' && !warrantyExpiryDate) {
-      setError('Warranty expiry date is required for approval.')
+    if (nextStatus === 'APPROVED' && (!replacementWarrantyExpiryDate || !serviceWarrantyExpiryDate)) {
+      setError('Replacement and service warranty expiry dates are required for approval.')
       return
     }
-    if (nextStatus === 'APPROVED' && warrantyExpiryDate < row.purchase_date) {
-      setError('Warranty expiry date cannot be earlier than purchase date.')
+    if (
+      nextStatus === 'APPROVED' &&
+      (replacementWarrantyExpiryDate < row.purchase_date || serviceWarrantyExpiryDate < row.purchase_date)
+    ) {
+      setError('Warranty expiry dates cannot be earlier than purchase date.')
       return
     }
     setUpdatingId(identifier)
     setError(null)
     try {
-      await updateWarrantyRegistrationStatus(token, identifier, nextStatus, reason, warrantyExpiryDate)
+      await updateWarrantyRegistrationStatus(
+        token,
+        identifier,
+        nextStatus,
+        reason,
+        replacementWarrantyExpiryDate,
+        serviceWarrantyExpiryDate
+      )
       setStatusAction(null)
       setStatusReason('')
-      setWarrantyExpiryDate('')
+      setReplacementWarrantyExpiryDate('')
+      setServiceWarrantyExpiryDate('')
       await load()
+      await loadSummary()
     } catch (err) {
       setStatusAction(null)
       setError(err instanceof Error ? err.message : 'Unable to update status.')
@@ -181,6 +291,8 @@ export default function AdminRegistrationsClient() {
       setError('This registration row is missing both ID and reference number.')
       return
     }
+    setOpeningBillId(identifier)
+    setError(null)
     try {
       const bill = await downloadWarrantyBillFile(token, identifier)
       const objectUrl = window.URL.createObjectURL(bill.blob)
@@ -193,6 +305,8 @@ export default function AdminRegistrationsClient() {
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to open bill.')
+    } finally {
+      setOpeningBillId(null)
     }
   }
 
@@ -265,6 +379,23 @@ export default function AdminRegistrationsClient() {
     }
   }
 
+  async function searchChangeLog(nextSkip = 0) {
+    const token = getAdminAccessToken()
+    if (!token) return logout()
+    setChangeLogLoading(true)
+    setError(null)
+    try {
+      const result = await queryWarrantyChangeLog(token, search, nextSkip, CHANGE_LOG_PAGE_SIZE)
+      setChangeLogRows(result.items)
+      setChangeLogSkip(result.skip)
+      setChangeLogOpen(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load change log.')
+    } finally {
+      setChangeLogLoading(false)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -273,6 +404,14 @@ export default function AdminRegistrationsClient() {
           <p className="mt-2 text-sm text-limac-muted">Pending customer requests awaiting review.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={goAdminHome}
+            className={headerButtonClass}
+          >
+            <Home size={16} />
+            Admin home
+          </button>
           {canManageUsers ? (
             <>
               <Link
@@ -301,7 +440,10 @@ export default function AdminRegistrationsClient() {
           </Link>
           <button
             type="button"
-            onClick={() => load()}
+            onClick={() => {
+              load()
+              loadSummary()
+            }}
             className={headerButtonClass}
           >
             <RefreshCw size={16} />
@@ -318,22 +460,54 @@ export default function AdminRegistrationsClient() {
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2 rounded-lg border border-gray-800 bg-gray-900 p-2">
-        {filters.map((filter) => (
-          <button
-            key={filter.label}
-            type="button"
-            onClick={() => selectFilter(filter.value)}
-            className={`rounded-md px-3 py-2 text-sm font-semibold ${
-              status === filter.value
-                ? 'bg-limac-green text-limac-black'
-                : 'text-limac-muted hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {warrantyTiles.map(({ label, filter, valueKey, tone, Icon }) => {
+          const active = selectedWarrantyFilter === filter
+          const value = warrantySummary?.[valueKey]
+          return (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => selectWarrantyTile(filter)}
+              className={`rounded-lg border p-4 text-left transition ${
+                active
+                  ? 'border-limac-green bg-limac-green/15'
+                  : 'border-gray-800 bg-gray-900 hover:border-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <Icon
+                  size={20}
+                  className={tone === 'danger' ? 'text-red-400' : 'text-limac-green'}
+                />
+                <span className="text-2xl font-bold text-white">
+                  {summaryLoading && value === undefined ? '-' : value ?? 0}
+                </span>
+              </div>
+              <div className="mt-3 text-sm font-semibold text-white">{label}</div>
+            </button>
+          )
+        })}
       </div>
+
+      {!changeLogOpen ? (
+        <div className="mt-6 flex flex-wrap gap-2 rounded-lg border border-gray-800 bg-gray-900 p-2">
+          {filters.map((filter) => (
+            <button
+              key={filter.label}
+              type="button"
+              onClick={() => selectFilter(filter.value)}
+              className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                !selectedWarrantyFilter && status === filter.value
+                  ? 'bg-limac-green text-limac-black'
+                  : 'text-limac-muted hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <form onSubmit={submitSearch} className="mt-5 flex flex-col gap-3 sm:flex-row">
         <label className="flex-1">
@@ -359,18 +533,100 @@ export default function AdminRegistrationsClient() {
             type="button"
             onClick={() => {
               setSearch('')
-              load(status, '')
+              setSelectedWarrantyFilter(undefined)
+              load(status, '', undefined)
+              setChangeLogRows([])
+              setChangeLogOpen(false)
+              setChangeLogSkip(0)
             }}
             className="rounded-lg border border-gray-700 px-5 py-3 text-sm font-semibold text-white"
           >
             Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => searchChangeLog(0)}
+            className="rounded-lg border border-gray-700 px-5 py-3 text-sm font-semibold text-white"
+          >
+            {changeLogLoading ? 'Loading...' : 'Change log'}
           </button>
         </div>
       </form>
 
       {error ? <p className="mt-5 rounded-lg bg-red-500/10 p-3 text-sm text-red-700">{error}</p> : null}
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
+      {changeLogOpen ? (
+        <div className="mt-5 rounded-lg border border-gray-800 bg-gray-900 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-semibold text-white">Change log</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={changeLogLoading || changeLogSkip === 0}
+                onClick={() => searchChangeLog(Math.max(changeLogSkip - CHANGE_LOG_PAGE_SIZE, 0))}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={changeLogLoading || changeLogRows.length < CHANGE_LOG_PAGE_SIZE}
+                onClick={() => searchChangeLog(changeLogSkip + CHANGE_LOG_PAGE_SIZE)}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setChangeLogOpen(false)
+                  setChangeLogRows([])
+                  setChangeLogSkip(0)
+                }}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-limac-muted">
+            Showing {changeLogRows.length ? changeLogSkip + 1 : 0}-
+            {changeLogSkip + changeLogRows.length}
+          </p>
+          {changeLogRows.length ? (
+            <div className="mt-4 space-y-4">
+              {changeLogRows.map((row) => (
+                <div key={row.registration_number} className="rounded-md border border-gray-800 p-3 text-sm">
+                  <div className="font-semibold text-white">{row.registration_number}</div>
+                  <div className="mt-1 text-xs text-limac-muted">
+                    {row.customer_name || '-'} | {row.mobile_number || '-'} | {row.serial_numbers.join(', ')}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {row.decision_history?.length ? (
+                      row.decision_history.map((event, index) => (
+                        <div key={`${row.registration_number}-${event.created_at}-${index}`} className="text-limac-muted">
+                          <span className="font-semibold text-white">{event.event_type || event.status}</span>
+                          {event.created_at ? ` on ${new Date(event.created_at).toLocaleString('en-IN')}` : ''}
+                          {event.admin_id ? ` by ${event.admin_id}` : ''}
+                          {event.reason ? ` - ${event.reason}` : ''}
+                          {event.replacement_warranty_expiry_date ? ` | Replacement: ${event.replacement_warranty_expiry_date}` : ''}
+                          {event.service_warranty_expiry_date ? ` | Service: ${event.service_warranty_expiry_date}` : ''}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-limac-muted">No changes recorded.</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-limac-muted">No change log entries found.</p>
+          )}
+        </div>
+      ) : null}
+
+      {!changeLogOpen ? <div className="mt-6 overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-gray-800 text-xs uppercase text-limac-muted">
@@ -378,7 +634,12 @@ export default function AdminRegistrationsClient() {
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Serial</th>
-                <th className="px-4 py-3">Warranty</th>
+                <th className="px-4 py-3">
+                  <span title="Date format: YYYY-MM-DD">Replacement warranty</span>
+                </th>
+                <th className="px-4 py-3">
+                  <span title="Date format: YYYY-MM-DD">Service warranty</span>
+                </th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Submitted</th>
                 <th className="px-4 py-3">Actions</th>
@@ -387,11 +648,11 @@ export default function AdminRegistrationsClient() {
             <tbody className="divide-y divide-gray-800">
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-limac-muted" colSpan={7}>Loading registrations...</td>
+                  <td className="px-4 py-6 text-limac-muted" colSpan={8}>Loading registrations...</td>
                 </tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-limac-muted" colSpan={7}>No registrations found.</td>
+                  <td className="px-4 py-6 text-limac-muted" colSpan={8}>No registrations found.</td>
                 </tr>
               ) : (
                 visibleRows.map((row) => {
@@ -417,9 +678,16 @@ export default function AdminRegistrationsClient() {
                     </td>
                     <td className="px-4 py-3">
                       {row.status === 'APPROVED' ? (
-                        <WarrantyExpiryCell value={row.warranty_expiry_date} />
+                        <WarrantyDateCell value={row.replacement_warranty_expiry_date} />
                       ) : (
                         <span aria-label="No warranty expiry date" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.status === 'APPROVED' ? (
+                        <WarrantyDateCell value={row.service_warranty_expiry_date} />
+                      ) : (
+                        <span aria-label="No service warranty expiry date" />
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -444,12 +712,16 @@ export default function AdminRegistrationsClient() {
                       <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={!row.has_bill}
+                        disabled={!row.has_bill || openingBillId === identifier}
                         onClick={() => viewBill(row)}
                         className="inline-flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        <Eye size={14} />
-                        Bill
+                        {openingBillId === identifier ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Eye size={14} />
+                        )}
+                        {openingBillId === identifier ? 'Opening...' : 'Bill'}
                       </button>
                       {canManageUsers ? (
                         <button
@@ -470,7 +742,7 @@ export default function AdminRegistrationsClient() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div> : null}
 
       {statusAction ? (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/70 px-4">
@@ -495,14 +767,25 @@ export default function AdminRegistrationsClient() {
             {statusAction.nextStatus === 'APPROVED' ? (
               <label className="mt-4 block">
                 <span className="mb-1.5 block text-sm font-semibold text-white">
-                  Warranty expiry date
+                  Replacement warranty expiry date
                 </span>
                 <input
                   required
                   type="date"
                   min={statusAction.row.purchase_date}
-                  value={warrantyExpiryDate}
-                  onChange={(event) => setWarrantyExpiryDate(event.target.value)}
+                  value={replacementWarrantyExpiryDate}
+                  onChange={(event) => setReplacementWarrantyExpiryDate(event.target.value)}
+                  className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
+                />
+                <span className="mb-1.5 mt-4 block text-sm font-semibold text-white">
+                  Service warranty expiry date
+                </span>
+                <input
+                  required
+                  type="date"
+                  min={statusAction.row.purchase_date}
+                  value={serviceWarrantyExpiryDate}
+                  onChange={(event) => setServiceWarrantyExpiryDate(event.target.value)}
                   className="w-full rounded-lg border border-gray-700 bg-limac-black px-3 py-3 text-sm text-white outline-none focus:border-limac-green"
                 />
                 <span className="mt-1.5 block text-xs text-limac-muted">
@@ -634,19 +917,16 @@ function isPdfBill(bill: { filename: string; contentType: string }) {
   return bill.contentType.toLowerCase().includes('pdf') || bill.filename.toLowerCase().endsWith('.pdf')
 }
 
-function WarrantyExpiryCell({ value }: { value?: string }) {
+function WarrantyDateCell({ value }: { value?: string }) {
   if (!value) {
     return <span className="text-limac-muted">-</span>
   }
-  const expired = value < new Date().toISOString().slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  const expired = value < today
   return (
     <div>
-      <div className={expired ? 'font-semibold text-red-500' : 'font-semibold text-limac-green'}>
-        {value}
-      </div>
-      <div className="text-xs text-limac-muted">
-        {expired ? 'Expired' : 'Warranty expiry'}
-      </div>
+      <div className={expired ? 'font-semibold text-red-500' : 'font-semibold text-limac-green'}>{value}</div>
+      {expired ? <div className="text-xs text-red-400">Expired</div> : null}
     </div>
   )
 }
