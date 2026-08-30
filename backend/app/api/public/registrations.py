@@ -17,10 +17,10 @@ from app.services.registrations import (
     create_warranty_registration,
     lookup_registration_status,
 )
+from app.storage.bill_storage import upload_bill
 from app.storage.cloudinary_storage import (
     StorageConfigurationError,
     StorageUploadError,
-    upload_bill_to_cloudinary,
 )
 from app.utils.time import utc_now
 
@@ -110,7 +110,7 @@ async def upload_registration_document(
         )
 
     try:
-        bill_asset = await upload_bill_to_cloudinary(
+        bill_asset = await upload_bill(
             settings=settings,
             reference=reference,
             filename=bill.filename,

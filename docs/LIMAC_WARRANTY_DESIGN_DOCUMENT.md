@@ -25,7 +25,7 @@ The public warranty pages are part of the Next.js website, but all warranty busi
 | Warranty frontend | Next.js client components | Vercel/browser | Registration form, status lookup, admin UI |
 | Warranty API | FastAPI, Pydantic, Motor | Render Docker service | Registration, admin auth, product serial database, review actions, change log, warranty dashboard, serial import, CSV export |
 | Database | MongoDB | Atlas or local Docker | Warranty records, products, admin users, audit/backup data |
-| Bill storage | Cloudinary authenticated assets | Cloudinary | Secure warranty bill storage for backend-proxied image/PDF preview |
+| Bill storage | Cloudinary authenticated assets or Cloudflare R2 objects | Cloudinary/R2 | Secure warranty bill storage for backend-proxied image/PDF preview |
 | Captcha | Cloudflare Turnstile | Cloudflare | Public registration bot protection |
 | Domain/DNS | BigRock or DNS provider, Vercel DNS records | DNS | Routes public domain to Vercel |
 | Production deploy workflow | GitHub Actions + Vercel CLI | GitHub Actions | Manual Vercel production deployment |
@@ -43,7 +43,7 @@ flowchart TB
 
   WarrantyClient -->|NEXT_PUBLIC_WARRANTY_API_URL| RenderApi[FastAPI Warranty API on Render]
   RenderApi --> Mongo[(MongoDB Database)]
-  RenderApi --> Cloudinary[Cloudinary Authenticated Bill Storage]
+  RenderApi --> BillStorage[Cloudinary or Cloudflare R2 Bill Storage]
   RenderApi --> CloudflareTurnstile[Cloudflare Turnstile Siteverify]
 
   GitHub[GitHub Repository] --> GitHubActions[Manual Deploy Production Workflow]
@@ -78,7 +78,7 @@ flowchart TB
 | `backend/app/repositories/` | MongoDB repository layer |
 | `backend/app/services/` | Business services |
 | `backend/app/security/` | Password, JWT, admin auth dependencies |
-| `backend/app/storage/` | Cloudinary integration |
+| `backend/app/storage/` | Bill storage integrations for Cloudinary and Cloudflare R2 |
 | `backend/tests/` | Backend tests |
 | `docs/` | Architecture and deployment documentation |
 
@@ -120,7 +120,7 @@ Available in current version:
   - PNG
   - PDF
 - Maximum upload size is controlled by `MAX_UPLOAD_BYTES`, currently defaulting to 2 MB.
-- Uploaded bills are stored in Cloudinary as authenticated assets.
+- Uploaded bills are stored in the configured bill storage provider, currently Cloudinary or Cloudflare R2.
 
 Planned future version:
 
@@ -187,7 +187,7 @@ Available in current version:
   - Service warranty under warranty
 - Clicking a warranty dashboard tile loads matching approved records and sorts by the relevant warranty expiry date.
 - Admins can open detail views.
-- Admins can view uploaded bills through the backend bill-file proxy. The UI supports image and PDF preview, shows a loading indicator while Cloudinary data is fetched, and offers opening PDFs in a new tab from a browser blob URL.
+- Admins can view uploaded bills through the backend bill-file proxy. The UI supports image and PDF preview, shows a loading indicator while provider data is fetched, and offers opening PDFs in a new tab from a browser blob URL.
 - Admin registration detail performs a fresh current lookup against the Limac product database, rather than relying only on the original registration snapshot.
 - Admins can update registration status.
 - Approval requires every submitted component serial to exist in the Limac product database and not already be `REGISTERED` for a different warranty.
@@ -321,7 +321,7 @@ sequenceDiagram
   participant T as Cloudflare Turnstile
   participant A as FastAPI Warranty API
   participant M as MongoDB
-  participant CL as Cloudinary
+  participant BS as Bill Storage
 
   C->>N: Open /warranty/register
   N->>T: Render Turnstile widget
@@ -341,8 +341,8 @@ sequenceDiagram
   A-->>N: 202 Accepted + registration_number
   C->>N: Upload bill
   N->>A: POST /api/v1/public/warranty-registrations/{reference}/documents
-  A->>CL: Upload authenticated asset
-  CL-->>A: Asset metadata
+  A->>BS: Upload bill to configured provider
+  BS-->>A: Asset metadata
   A->>M: Attach bill_asset metadata
   A-->>N: Bill uploaded
 ```
@@ -355,7 +355,7 @@ sequenceDiagram
   participant UI as Next.js Admin UI
   participant API as FastAPI Admin API
   participant DB as MongoDB
-  participant CL as Cloudinary
+  participant BS as Bill Storage
 
   Admin->>UI: Open /admin/warranty/login
   UI->>API: POST /api/v1/admin/auth/login
@@ -367,7 +367,7 @@ sequenceDiagram
   API-->>UI: Registration rows
   Admin->>UI: View bill
   UI->>API: GET /api/v1/admin/registrations/{id}/bill-file
-  API->>CL: Download authenticated asset bytes
+  API->>BS: Download stored asset bytes
   API-->>UI: Inline file bytes for image/PDF blob preview
   Admin->>UI: Approve registration with replacement and service dates
   UI->>API: POST /api/v1/admin/registrations/{id}/status APPROVED
@@ -537,7 +537,7 @@ The `warranty_registrations` collection stores the live registration queue and t
 | `purchase.dealer_code` | Optional dealer code |
 | `purchase.replacement_warranty_expiry_date` | Admin-entered replacement warranty expiry date for approved records |
 | `purchase.service_warranty_expiry_date` | Admin-entered service warranty expiry date for approved records |
-| `bill_asset` | Cloudinary asset metadata for image/PDF bill files; MongoDB does not store the bill bytes |
+| `bill_asset` | Provider metadata for Cloudinary/R2 image/PDF bill files; MongoDB does not store the bill bytes |
 | `status` | Current registration status |
 | `decision_history[]` | Per-registration change log, including registration received, status updates, approvals, reasons, admin IDs, and warranty date edits |
 | `serial_validation` | Snapshot of serial validation result at registration time, including component-level results |
@@ -651,11 +651,16 @@ Admin API notes:
 ### Bill Storage
 
 - Bills are not stored directly in MongoDB.
-- Bills are uploaded to Cloudinary as authenticated assets.
-- MongoDB stores only asset metadata such as public ID, resource type, checksum, size, folder, and content type.
-- Admin bill viewing primarily uses the backend `/bill-file` endpoint, which downloads the authenticated Cloudinary asset server-side and returns inline bytes to the browser.
+- New bill uploads are controlled by `BILL_STORAGE_PROVIDER`.
+- `BILL_STORAGE_PROVIDER=cloudinary` uploads new bills to Cloudinary as authenticated assets.
+- `BILL_STORAGE_PROVIDER=r2` uploads new bills to Cloudflare R2 using the S3-compatible API.
+- MongoDB stores only provider metadata in `warranty_registrations.bill_asset`; it does not store bill bytes.
+- Cloudinary metadata includes `asset_id`, `public_id`, `resource_type`, `folder`, file details, checksum, and upload timestamp.
+- R2 metadata includes `bucket`, `object_key`, file details, checksum, ETag, and upload timestamp.
+- The backend supports hybrid reading: old `provider=cloudinary` bills and new `provider=r2` bills can coexist.
+- Admin bill viewing primarily uses the backend `/bill-file` endpoint, which downloads the stored asset server-side and returns inline bytes to the browser.
 - The admin frontend builds browser blob URLs from the returned bytes for image/PDF preview and shows a loading state while the file is being fetched.
-- A signed Cloudinary access helper remains available for provider-level access patterns, but the UI uses the backend proxy to avoid browser-side authenticated raw URL failures.
+- Signed access helpers exist for provider-level access patterns, but the UI uses the backend proxy to avoid browser-side authenticated URL failures.
 
 ### CORS
 
@@ -691,10 +696,16 @@ Allowed origins are configured in backend settings:
 | `JWT_SECRET_KEY` | JWT signing secret |
 | `TURNSTILE_REQUIRED=true` | Captcha requirement |
 | `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile secret key |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `CLOUDINARY_BILL_FOLDER_ROOT=limac/warranty-bills` | Bill folder root |
+| `BILL_STORAGE_PROVIDER=cloudinary` | New bill upload provider: `cloudinary` or `r2` |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name, required when provider is `cloudinary` |
+| `CLOUDINARY_API_KEY` | Cloudinary API key, required when provider is `cloudinary` |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret, required when provider is `cloudinary` |
+| `CLOUDINARY_BILL_FOLDER_ROOT=limac/warranty-bills` | Cloudinary bill folder root |
+| `R2_ACCOUNT_ID` | Cloudflare account ID, required when provider is `r2` |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key ID, required when provider is `r2` |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret access key, required when provider is `r2` |
+| `R2_BUCKET_NAME` | Cloudflare R2 bucket name, required when provider is `r2` |
+| `R2_BILL_KEY_PREFIX=limac/warranty-bills` | R2 object key prefix for bill files |
 | `INITIAL_ADMIN_EMAIL` | Optional first super admin bootstrap email |
 | `INITIAL_ADMIN_PASSWORD` | Optional first super admin bootstrap password; remove after bootstrap |
 
@@ -822,13 +833,14 @@ TURNSTILE_REQUIRED=false
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ```
 
-### 11.6 Cloudinary Setup
+### 11.6 Bill Storage Setup
 
-Steps:
+Cloudinary option:
 
 1. Create or open the Cloudinary account.
 2. Get cloud name, API key, and API secret.
 3. Add these values to Render:
+   - `BILL_STORAGE_PROVIDER=cloudinary`
    - `CLOUDINARY_CLOUD_NAME`
    - `CLOUDINARY_API_KEY`
    - `CLOUDINARY_API_SECRET`
@@ -837,7 +849,23 @@ Steps:
 5. Backend uploads bills under:
    - `limac/warranty-bills/YYYY/MM`
 6. Confirm uploaded assets use authenticated access.
-7. Test admin bill preview; backend should return a signed URL.
+7. Test admin bill preview through `/bill-file`.
+
+Cloudflare R2 option:
+
+1. Create a Cloudflare R2 bucket for warranty bills.
+2. Create R2 API credentials with object read/write permission for the bucket.
+3. Add these values to Render:
+   - `BILL_STORAGE_PROVIDER=r2`
+   - `R2_ACCOUNT_ID`
+   - `R2_ACCESS_KEY_ID`
+   - `R2_SECRET_ACCESS_KEY`
+   - `R2_BUCKET_NAME`
+   - `R2_BILL_KEY_PREFIX=limac/warranty-bills`
+4. Backend uploads new bills under:
+   - `limac/warranty-bills/YYYY/MM/<registration-reference>-HHMMSS.<extension>`
+5. Test admin bill preview through `/bill-file`.
+6. Keep Cloudinary credentials configured if old Cloudinary bills still need to be opened during hybrid operation.
 
 ### 11.7 Domain and DNS Setup
 
@@ -891,7 +919,7 @@ Available now:
 - Privacy policy page and public registration consent link.
 - Cloudflare Turnstile integration.
 - Public warranty status lookup.
-- Cloudinary bill upload and admin image/PDF bill preview through backend bill-file proxy.
+- Configurable Cloudinary or Cloudflare R2 bill upload and admin image/PDF bill preview through backend bill-file proxy.
 - FastAPI warranty backend.
 - MongoDB indexes and repository layer.
 - Admin login.

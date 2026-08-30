@@ -91,23 +91,34 @@ MONGODB_DATABASE=limac
 JWT_SECRET_KEY=<generated-secret>
 TURNSTILE_SECRET_KEY=<cloudflare-turnstile-secret>
 TURNSTILE_REQUIRED=true
+BILL_STORAGE_PROVIDER=cloudinary
 CLOUDINARY_CLOUD_NAME=<cloud-name>
 CLOUDINARY_API_KEY=<api-key>
 CLOUDINARY_API_SECRET=<api-secret>
 CLOUDINARY_BILL_FOLDER_ROOT=limac/warranty-bills
+# For Cloudflare R2 bill storage instead:
+# BILL_STORAGE_PROVIDER=r2
+# R2_ACCOUNT_ID=<cloudflare-account-id>
+# R2_ACCESS_KEY_ID=<r2-access-key-id>
+# R2_SECRET_ACCESS_KEY=<r2-secret-access-key>
+# R2_BUCKET_NAME=<r2-bucket-name>
+# R2_BILL_KEY_PREFIX=limac/warranty-bills
 ```
 
-Warranty bills upload to Cloudinary using:
+When `BILL_STORAGE_PROVIDER=cloudinary`, warranty bills upload to Cloudinary using:
 
 ```text
 limac/warranty-bills/YYYY/MM
 ```
 
-For example, an August 2026 bill is stored under:
+When `BILL_STORAGE_PROVIDER=r2`, new warranty bills upload to Cloudflare R2 using:
 
 ```text
-limac/warranty-bills/2026/08
+limac/warranty-bills/YYYY/MM/<registration-reference>-HHMMSS.<extension>
 ```
+
+Existing Cloudinary bills continue to open because each registration stores its provider in
+`warranty_registrations.bill_asset.provider`.
 
 No SMS, OTP, Resend, SMTP, WhatsApp or outbound notification provider is required for V1.
 

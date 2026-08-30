@@ -38,10 +38,18 @@ class Settings(BaseSettings):
     submission_ip_day_limit: int = 15
     submission_mobile_day_limit: int = 3
 
+    bill_storage_provider: Literal["cloudinary", "r2"] = "cloudinary"
+
     cloudinary_cloud_name: str | None = None
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: str | None = None
     cloudinary_bill_folder_root: str = "limac/warranty-bills"
+
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: str | None = None
+    r2_bucket_name: str | None = None
+    r2_bill_key_prefix: str = "limac/warranty-bills"
 
     initial_admin_email: str | None = None
     initial_admin_password: str | None = None
@@ -65,6 +73,23 @@ class Settings(BaseSettings):
             and self.cloudinary_api_key
             and self.cloudinary_api_secret
         )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def r2_configured(self) -> bool:
+        return bool(
+            self.r2_account_id
+            and self.r2_access_key_id
+            and self.r2_secret_access_key
+            and self.r2_bucket_name
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def r2_endpoint_url(self) -> str | None:
+        if not self.r2_account_id:
+            return None
+        return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
 
 
 @lru_cache

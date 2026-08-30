@@ -16,12 +16,13 @@ from app.repositories.products import ProductRepository
 from app.repositories.registrations import RegistrationRepository
 from app.security.admin_auth import require_admin, require_super_admin
 from app.services.registrations import registration_component_serials, release_registration_components
+from app.storage.bill_storage import download_bill
 from app.storage.cloudinary_storage import (
     StorageConfigurationError,
     StorageDownloadError,
     build_cloudinary_bill_access,
-    download_bill_from_cloudinary,
 )
+from app.storage.r2_storage import R2ConfigurationError, R2DownloadError, build_r2_bill_access
 from app.utils.time import utc_now
 
 router = APIRouter(prefix="/registrations", tags=["admin-registrations"])
@@ -385,9 +386,16 @@ async def bill_access(
             return build_cloudinary_bill_access(settings, asset)
         except StorageConfigurationError as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    if asset.get("provider") == "r2":
+        try:
+            return build_r2_bill_access(settings, asset)
+        except R2ConfigurationError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        except R2DownloadError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     raise HTTPException(
         status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        detail="Unsupported bill storage provider. Bills must be stored in Cloudinary, not MongoDB.",
+        detail="Unsupported bill storage provider.",
     )
 
 
@@ -402,13 +410,8 @@ async def bill_file(
     if not document or not document.get("bill_asset"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found.")
     asset = document["bill_asset"]
-    if asset.get("provider") != "cloudinary":
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Unsupported bill storage provider. Bills must be stored in Cloudinary, not MongoDB.",
-        )
     try:
-        content, content_type, filename = await download_bill_from_cloudinary(settings, asset)
+        content, content_type, filename = await download_bill(settings, asset)
     except StorageConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except StorageDownloadError as exc:
@@ -449,6 +452,8 @@ CSV_EXPORT_FIELDS = [
     "bill_filename",
     "bill_content_type",
     "bill_public_id",
+    "bill_bucket",
+    "bill_object_key",
     "bill_folder",
     "bill_uploaded_at",
     "decision_history",
@@ -492,6 +497,8 @@ def _registration_csv_row(row: dict[str, Any]) -> dict[str, str]:
         "bill_filename": _csv_value(bill_asset.get("filename")),
         "bill_content_type": _csv_value(bill_asset.get("content_type")),
         "bill_public_id": _csv_value(bill_asset.get("public_id")),
+        "bill_bucket": _csv_value(bill_asset.get("bucket")),
+        "bill_object_key": _csv_value(bill_asset.get("object_key")),
         "bill_folder": _csv_value(bill_asset.get("folder")),
         "bill_uploaded_at": _csv_value(bill_asset.get("uploaded_at")),
         "decision_history": json.dumps(row.get("decision_history") or [], ensure_ascii=True),
