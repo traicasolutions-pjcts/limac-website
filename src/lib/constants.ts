@@ -5,7 +5,7 @@ export const LIMAC = {
   founded: 2018,
   phone: {
     primary: '+91 81388 01828',
-    secondary: '+91 99958 86909',
+    secondary: '+91 62387 21226',
     tertiary: '+91 99958 11159',
   },
   whatsapp: '918138801828',
